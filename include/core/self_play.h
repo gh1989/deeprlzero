@@ -3,6 +3,7 @@
 
 #include "core/game.h"
 #include "core/mcts.h"
+#include "core/config.h"
 #include <vector>
 #include <tuple>
 #include <random>
@@ -17,15 +18,13 @@ struct GameExample {
 
 class SelfPlay {
  public:
-  SelfPlay(std::shared_ptr<NeuralNetwork> network, int num_simulations, float c_puct, float temperature = 1.0f);
+  SelfPlay(std::shared_ptr<NeuralNetwork> network, const Config& config);
   
   std::vector<GameExample> ExecuteEpisode();
   
  private:
   std::shared_ptr<NeuralNetwork> network_;
-  int num_simulations_;
-  float c_puct_;
-  float temperature_;
+  const Config& config_;
   std::mt19937 rng_{std::random_device{}()};
 };
 

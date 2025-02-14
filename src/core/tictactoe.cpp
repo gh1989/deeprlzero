@@ -97,4 +97,16 @@ bool TicTacToe::IsBoardFull() const {
     return true;
 }
 
+void TicTacToe::UndoMove(int move) {
+    int row = move / kBoardSize;
+    int col = move % kBoardSize;
+    
+    if (row < 0 || row >= kBoardSize || col < 0 || col >= kBoardSize) {
+        throw std::invalid_argument("Invalid move to undo");
+    }
+    
+    board_[row][col] = 0;  // Clear the position
+    current_player_ = -current_player_;  // Switch back to previous player
+}
+
 }  // namespace alphazero 

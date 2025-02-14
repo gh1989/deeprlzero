@@ -12,21 +12,38 @@ class Config {
   int num_filters = 32;
   int num_residual_blocks = 3;
   float learning_rate = 1e-3;
-    
+  float prior_alpha = 0.75f;
+  
+  // Temperature annealing
+  float initial_temperature = 1.0f;
+  float min_temperature = 0.1f;
+  float temperature_decay = 0.95f;
+  
   // MCTS configuration
   int num_simulations = 100;
   float c_puct = 3.0;
   float temperature = 1.0;
+  int board_size = 9;        
+  int mcts_batch_size = 64;  // For MCTS batch evaluations
+  float gamma_alpha = 0.3f;      // Gamma distribution alpha parameter
+  float gamma_beta = 1.0f;       // Gamma distribution beta parameter
     
   // Training configuration
-  int batch_size = 2048;        // Increased from 32 for better GPU utilization
-  int num_epochs = 100;         // Keep this value, it's already good
+  int training_batch_size = 2048;  
+  int num_epochs = 100;
   int num_iterations = 25;
   int episodes_per_iteration = 25;
     
+  // Evaluation configuration
+  int num_evaluation_games = 200;
+  float acceptance_threshold = 0.52f;
+    
   std::string model_path = "alphazero_model.pt";
-
-  int num_threads = 24;  // Default to max threads
+  std::string log_file_path = "alphazero_log.txt";
+  
+  int num_threads = 24;
+  float l2_reg = 1e-4;
+  float dropout_rate = 0.3;
 
   static Config ParseCommandLine(int argc, char** argv) {
     Config config;
@@ -43,7 +60,7 @@ class Config {
         config.num_filters = std::stoi(argv[++i]);
       } else if (arg == "-r" || arg == "--residual-blocks") {
         config.num_residual_blocks = std::stoi(argv[++i]);
-      } else if (arg == "-l" || arg == "--learning-rate") {
+      } else if (arg == "-l" || arg == "--learning-rate") { 
         config.learning_rate = std::stof(argv[++i]);
       } else if (arg == "-s" || arg == "--simulations") {
         config.num_simulations = std::stoi(argv[++i]);
@@ -52,7 +69,7 @@ class Config {
       } else if (arg == "-t" || arg == "--temperature") {
         config.temperature = std::stof(argv[++i]);
       } else if (arg == "-b" || arg == "--batch-size") {
-        config.batch_size = std::stoi(argv[++i]);
+        config.training_batch_size = std::stoi(argv[++i]);
       } else if (arg == "-e" || arg == "--epochs") {
         config.num_epochs = std::stoi(argv[++i]);
       } else if (arg == "-i" || arg == "--iterations") {
@@ -61,6 +78,10 @@ class Config {
         config.episodes_per_iteration = std::stoi(argv[++i]);
       } else if (arg == "-m" || arg == "--model") {
         config.model_path = argv[++i];
+      } else if (arg == "-n" || arg == "--eval-games") {
+        config.num_evaluation_games = std::stoi(argv[++i]);
+      } else if (arg == "-a" || arg == "--acceptance-threshold") {
+        config.acceptance_threshold = std::stof(argv[++i]);
       } else if (arg == "-h" || arg == "--help") {
         PrintUsage();
         exit(0);
@@ -89,6 +110,8 @@ class Config {
               << "  -i, --iterations <n>      Number of iterations (default: 25)\n"
               << "  -g, --games <n>           Games per iteration (default: 25)\n"
               << "  -m, --model <path>        Model path (default: alphazero_model.pt)\n"
+              << "  -n, --eval-games <n>      Number of evaluation games (default: 200)\n"
+              << "  -a, --acceptance-threshold <f>  Acceptance threshold (default: 0.52)\n"
               << "  -h, --help                Print this help message\n";
   }
 };

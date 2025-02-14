@@ -37,6 +37,9 @@ class Game {
   
   // Returns number of input channels for neural network
   virtual int GetInputChannels() const = 0;
+  
+  // Add this new pure virtual method
+  virtual void UndoMove(int move) = 0;
 };
 
 } // namespace alphazero

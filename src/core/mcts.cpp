@@ -11,32 +11,29 @@
 
 namespace alphazero {
 
-MCTS::MCTS(std::shared_ptr<NeuralNetwork> network, float c_puct, int num_simulations)
-    : network_(network), c_puct_(c_puct), num_simulations_(num_simulations) {
+MCTS::MCTS(std::shared_ptr<NeuralNetwork> network, const Config& config)
+    : network_(network), config_(config) {
     if (!network_) {
         throw std::invalid_argument("Neural network cannot be null");
     }
-    if (num_simulations_ <= 0) {
-        throw std::invalid_argument("Number of simulations must be positive");
-    }
-    if (c_puct_ <= 0) {
-        throw std::invalid_argument("c_puct must be positive");
-    }
-    root_ = std::make_unique<Node>();
+    root_ = std::make_unique<Node>(config);
 }
 
 void MCTS::ResetRoot() {
-    root_ = std::make_unique<Node>();
+    root_ = std::make_unique<Node>(config_);
 }
 
 std::vector<float> MCTS::GetActionProbabilities(const Game& state, float temperature) {
     if (!root_) {
-        root_ = std::make_unique<Node>();
+        root_ = std::make_unique<Node>(config_);
     }
         
+    // Create a mutable copy of the state for simulation using Clone()
+    std::unique_ptr<Game> mutable_state = state.Clone();
+    
     // Run simulations from current root
-    for (int i = 0; i < num_simulations_; ++i) {
-        Search(state, root_.get());
+    for (int i = 0; i < config_.num_simulations; ++i) {
+        Search(*mutable_state, root_.get());
     }
         
     std::vector<float> action_probs(state.GetActionSize(), 0.0f);
@@ -63,9 +60,7 @@ std::vector<float> MCTS::GetActionProbabilities(const Game& state, float tempera
     return action_probs;
 }
 
-void MCTS::Search(const Game& state, Node* node) {
-    assert(node != nullptr && "Node cannot be null");
-    
+void MCTS::Search(Game& state, Node* node) {
     if (state.IsTerminal()) {
         float value = state.GetGameResult();
         Backpropagate(node, value);
@@ -73,48 +68,30 @@ void MCTS::Search(const Game& state, Node* node) {
     }
     
     if (!node->IsExpanded()) {
-        // Get policy and value from neural network
         auto [policy, value] = GetPolicyValue(state);
         auto valid_moves = state.GetValidMoves();
-          
-        assert(!valid_moves.empty() && "Must have at least one valid move");
-        assert(policy.size() == state.GetActionSize() && "Policy size must match action size");
         
-        // Initialize children vector if needed
         if (node->children.empty()) {
             node->children.resize(state.GetActionSize());
         }
         
-        // Create child nodes
         for (int move : valid_moves) {
-            assert(move >= 0 && move < state.GetActionSize() && "Move must be within valid range");
-            auto child = std::make_unique<Node>();
+            auto child = std::make_unique<Node>(config_);
             child->prior = policy[move];
             child->parent = node;
             child->action = move;
             node->children[move] = std::move(child);
         }
         
-        // Increment visit count for expansion
-        node->visit_count++;
-        
-        // Select a child to visit
-        auto [action, child] = SelectAction(node, state);
-        auto next_state = state.Clone();
-        next_state->MakeMove(action);
-        Search(*next_state, child);
+        Backpropagate(node, value);
         return;
     }
     
-    // Select action according to PUCT formula
     auto [action, child] = SelectAction(node, state);
-    assert(child != nullptr && "Selected child cannot be null");
-    assert(action >= 0 && action < state.GetActionSize() && "Selected action must be valid");
-    
-    auto next_state = state.Clone();
-    assert(next_state != nullptr && "Cloned state cannot be null");
-    next_state->MakeMove(action);
-    Search(*next_state, child);
+    last_move_ = action;  // Store the move
+    state.MakeMove(action);
+    Search(state, child);
+    state.UndoMove(last_move_);  // Use the stored move when undoing
 }
 
 std::pair<int, Node*> MCTS::SelectAction(Node* node, const Game& state) {
@@ -128,9 +105,8 @@ std::pair<int, Node*> MCTS::SelectAction(Node* node, const Game& state) {
     auto valid_moves = state.GetValidMoves();
     assert(!valid_moves.empty() && "Must have at least one valid move");
         
-    float sqrt_total = std::sqrt(static_cast<float>(node->visit_count));
+    float sqrt_total = std::sqrt(static_cast<float>(node->visit_count + 1));  // Add 1 to prevent division by zero
     
-    // First pass: try to select from existing children
     for (int move : valid_moves) {
         if (!node->children[move]) {
             continue;
@@ -138,7 +114,17 @@ std::pair<int, Node*> MCTS::SelectAction(Node* node, const Game& state) {
         
         Node* child = node->children[move].get();
         float q_value = child->visit_count > 0 ? child->GetValue() : 0.0f;
-        float u_value = c_puct_ * child->prior * sqrt_total / (1 + child->visit_count);
+        
+        // Add noise to root node for exploration
+        float prior = child->prior;
+        if (node == root_.get()) {
+            static thread_local std::mt19937 gen(std::random_device{}());
+            std::gamma_distribution<float> gamma(config_.gamma_alpha, config_.gamma_beta);
+            float noise = gamma(gen);
+            prior = config_.prior_alpha * prior + (1 - config_.prior_alpha) * noise;
+        }
+        
+        float u_value = config_.c_puct * prior * sqrt_total / (1 + child->visit_count);
         float score = q_value + u_value;
         
         if (score > best_score) {
@@ -152,7 +138,7 @@ std::pair<int, Node*> MCTS::SelectAction(Node* node, const Game& state) {
     if (best_action == -1) {
         // std::cout << "Creating new child for first valid move" << std::endl;
         int move = valid_moves[0];
-        auto child = std::make_unique<Node>();
+        auto child = std::make_unique<Node>(config_);
         child->parent = node;
         child->action = move;
         child->prior = 1.0f / valid_moves.size();

@@ -13,15 +13,13 @@ namespace alphazero {
 
 class Trainer {
  public:
-  Trainer(int batch_size, int num_epochs, float learning_rate);
+  Trainer(const Config& config) : config_(config) {}
   
   void Train(std::shared_ptr<NeuralNetwork> network,
             const std::vector<GameExample>& examples);
   
  private:
-  int batch_size_;
-  int num_epochs_;
-  float learning_rate_;
+  const Config& config_;
 };
 
 }  // namespace alphazero

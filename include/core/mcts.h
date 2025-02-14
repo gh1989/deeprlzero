@@ -3,6 +3,7 @@
 
 #include "game.h"
 #include "neural_network.h"
+#include "config.h"
 #include <memory>
 #include <vector>
 #include <cmath>
@@ -17,8 +18,9 @@ struct Node {
     Node* parent = nullptr;
     int action = -1;
     
-    Node() : parent(nullptr), visit_count(0), value_sum(0.0f), prior(0.0f), action(-1) {
-        children.resize(9); // TicTacToe specific (!)
+    explicit Node(const Config& config) 
+        : parent(nullptr), visit_count(0), value_sum(0.0f), prior(0.0f), action(-1) {
+        children.resize(config.board_size);
     }
 
     float GetValue() const {
@@ -36,15 +38,13 @@ struct Node {
 
 class MCTS {
 public:
-    MCTS(std::shared_ptr<NeuralNetwork> network, float c_puct, int num_simulations);
+    MCTS(std::shared_ptr<NeuralNetwork> network, const Config& config);
     
     std::vector<float> GetActionProbabilities(const Game& state, float temperature = 1.0f);
     int SelectMove(const Game& state, float temperature = 0.0f);
 
     void ResetRoot();
 
-    // Add batch processing support
-    static constexpr int BATCH_SIZE = 64;  // Adjust based on your GPU
     std::vector<Game*> evaluation_queue_;
     
     // Batch evaluation method
@@ -52,16 +52,18 @@ public:
     BatchEvaluate(const std::vector<Game*>& states);
 
 private:
-    void Search(const Game& state, Node* node);
+    void Search(Game& state, Node* node);
     std::pair<int, Node*> SelectAction(Node* node, const Game& state);
     void ExpandNode(Node* node, const Game& state);
     float Backpropagate(Node* node, float value);
     std::pair<std::vector<float>, float> GetPolicyValue(const Game& state);
     
     std::shared_ptr<NeuralNetwork> network_;
-    float c_puct_;
-    int num_simulations_;
+    const Config& config_;
     std::unique_ptr<Node> root_;
+    
+    // Add this member variable to track the last move
+    int last_move_ = -1;
 };
 
 } // namespace alphazero

@@ -7,13 +7,18 @@
 
 namespace alphazero {
 
-SelfPlay::SelfPlay(std::shared_ptr<NeuralNetwork> network, int num_simulations, float c_puct, float temperature)
-    : network_(network), num_simulations_(num_simulations), c_puct_(c_puct), temperature_(temperature) {}
+SelfPlay::SelfPlay(std::shared_ptr<NeuralNetwork> network, const Config& config)
+    : network_(network), config_(config) {
+    network_->to(torch::kCPU);
+    network_->eval();
+}
 
 std::vector<GameExample> SelfPlay::ExecuteEpisode() {
+    // Ensure we're on CPU for parallel execution
+    network_->to(torch::kCPU);
     std::vector<GameExample> examples;
     auto game = std::make_unique<TicTacToe>();
-    MCTS mcts(network_, c_puct_, num_simulations_);
+    MCTS mcts(network_, config_);
     
     // Game state initialization checks
     assert(game != nullptr);
@@ -33,7 +38,7 @@ std::vector<GameExample> SelfPlay::ExecuteEpisode() {
         }
         
         // Get and validate MCTS probabilities
-        auto action_probs = mcts.GetActionProbabilities(*game, temperature_);
+        auto action_probs = mcts.GetActionProbabilities(*game, config_.temperature);
         assert(!action_probs.empty() && "MCTS must return non-empty probabilities");
         assert(action_probs.size() == game->GetActionSize() && "MCTS must return probabilities for all actions");
         

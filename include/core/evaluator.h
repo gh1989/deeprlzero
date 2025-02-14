@@ -3,15 +3,14 @@
 
 #include "game.h"
 #include "mcts.h"
+#include "config.h"
 #include <memory>
 
 namespace alphazero {
 
 class Evaluator {
 public:
-    Evaluator(std::shared_ptr<NeuralNetwork> network, 
-              float c_puct = 1.0f,
-              int num_simulations = 100);
+    Evaluator(std::shared_ptr<NeuralNetwork> network, const Config& config);
     
     // Play against random player
     float EvaluateAgainstRandom();
@@ -26,8 +25,7 @@ public:
 private:
     static constexpr int kNumEvaluationGames = 100;  // Fixed constant
     std::shared_ptr<NeuralNetwork> network_;
-    float c_puct_;
-    int num_simulations_;
+    const Config& config_;
 };
 
 } // namespace alphazero

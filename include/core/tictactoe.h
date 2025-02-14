@@ -23,6 +23,7 @@ class TicTacToe : public Game {
   std::unique_ptr<Game> Clone() const override;
   int GetActionSize() const override { return kNumActions; }
   int GetInputChannels() const override { return kNumChannels; }
+  void UndoMove(int move) override;
 
  private:
   std::array<std::array<int, kBoardSize>, kBoardSize> board_;

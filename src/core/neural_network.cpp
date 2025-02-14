@@ -64,11 +64,11 @@ std::pair<torch::Tensor, torch::Tensor> NeuralNetwork::forward(torch::Tensor x) 
     policy = policy_fc(policy.flatten(1));  // flatten all dimensions after batch
     policy = torch::softmax(policy, /*dim=*/1);
     
-    // Value head
+    // Value head - ensure proper scaling
     auto value = value_bn(value_conv(x));
     value = torch::relu(value);
-    value = torch::relu(value_fc1(value.flatten(1)));  // flatten all dimensions after batch
-    value = torch::tanh(value_fc2(value));
+    value = torch::relu(value_fc1(value.flatten(1)));
+    value = torch::tanh(value_fc2(value));  // Ensure tanh activation is working
     
     return {policy, value};
 }

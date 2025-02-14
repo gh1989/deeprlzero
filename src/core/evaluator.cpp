@@ -5,24 +5,16 @@
 
 namespace alphazero {
 
-Evaluator::Evaluator(std::shared_ptr<NeuralNetwork> network, 
-                     float c_puct, 
-                     int num_simulations)
-    : network_(network),
-      c_puct_(c_puct),
-      num_simulations_(num_simulations) {
-    // Constructor implementation
-}
+Evaluator::Evaluator(std::shared_ptr<NeuralNetwork> network, const Config& config)
+    : network_(network), config_(config) {}
 
 float Evaluator::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> opponent) {
     float score = 0.0f;
     
-    // Create MCTS instances for both networks
-    MCTS mcts_main(network_, c_puct_, num_simulations_);
-    MCTS mcts_opponent(opponent, c_puct_, num_simulations_);
+    MCTS mcts_main(network_, config_);
+    MCTS mcts_opponent(opponent, config_);
     
-    static constexpr int kNumEvaluationGames = 40;  // Reduced from 100 for faster evaluation
-    for (int i = 0; i < kNumEvaluationGames; ++i) {
+    for (int i = 0; i < config_.num_evaluation_games; ++i) {
         auto game = std::make_unique<TicTacToe>();
         bool network_plays_first = (i % 2 == 0);
         
@@ -47,7 +39,7 @@ float Evaluator::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> opponent)
         }
     }
     
-    return score / kNumEvaluationGames;
+    return score / config_.num_evaluation_games;
 }
 
 float Evaluator::EvaluateAgainstRandom() {
@@ -55,10 +47,9 @@ float Evaluator::EvaluateAgainstRandom() {
     std::random_device rd;
     std::mt19937 gen(rd());
     
-    MCTS mcts(network_, c_puct_, num_simulations_);
+    MCTS mcts(network_, config_);
     
-    static constexpr int kNumEvaluationGames = 100;  // Fixed constant
-    for (int i = 0; i < kNumEvaluationGames; ++i) {
+    for (int i = 0; i < config_.num_evaluation_games; ++i) {
         auto game = std::make_unique<TicTacToe>();
         bool network_plays_first = (i % 2 == 0);
         
@@ -90,7 +81,7 @@ float Evaluator::EvaluateAgainstRandom() {
         }
     }
     
-    return static_cast<float>(wins) / kNumEvaluationGames;
+    return static_cast<float>(wins) / config_.num_evaluation_games;
 }
 
 } // namespace alphazero
