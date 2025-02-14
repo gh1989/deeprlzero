@@ -25,6 +25,22 @@ class TicTacToe : public Game {
   int GetInputChannels() const override { return kNumChannels; }
   void UndoMove(int move) override;
 
+  // Add visualization method
+  std::string ToString() const {
+    std::string result;
+    for (int i = 0; i < kBoardSize; ++i) {
+      for (int j = 0; j < kBoardSize; ++j) {
+        switch (board_[i][j]) {
+          case 1: result += " X "; break;
+          case -1: result += " O "; break;
+          case 0: result += " . "; break;
+        }
+      }
+      result += "\n";
+    }
+    return result;
+  }
+
  private:
   std::array<std::array<int, kBoardSize>, kBoardSize> board_;
   int current_player_;

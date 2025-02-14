@@ -103,6 +103,11 @@ std::vector<GameExample> SelfPlay::ExecuteEpisode() {
         game->MakeMove(move);
         assert(std::find(valid_moves.begin(), valid_moves.end(), move) != valid_moves.end() && 
                "Selected move must have been in valid moves list");
+        
+        // After each move, accumulate the stats
+        const MCTSStats& move_stats = mcts.GetStats();
+        mcts_stats_ = move_stats;  // This will aggregate the stats
+        mcts.ClearStats();  // Clear for next move
     }
     
     // Validate final game state and examples

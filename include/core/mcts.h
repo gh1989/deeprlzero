@@ -7,6 +7,7 @@
 #include <memory>
 #include <vector>
 #include <cmath>
+#include "core/mcts_stats.h"
 
 namespace alphazero {
 
@@ -51,6 +52,10 @@ public:
     std::vector<std::pair<std::vector<float>, float>> 
     BatchEvaluate(const std::vector<Game*>& states);
 
+    // Add stats getter
+    const MCTSStats& GetStats() const { return stats_; }
+    void ClearStats() { stats_ = MCTSStats(); }
+
 private:
     void Search(Game& state, Node* node);
     std::pair<int, Node*> SelectAction(Node* node, const Game& state);
@@ -64,6 +69,33 @@ private:
     
     // Add this member variable to track the last move
     int last_move_ = -1;
+    MCTSStats stats_;
+    
+    float CalculatePUCTScore(Node* node, float prior, const Game& state) {
+        float puct_score = config_.c_puct * prior * 
+            (std::sqrt(node->visit_count + 1) / (1 + node->visit_count));
+        float q_value = node->GetValue();
+        
+        stats_.RecordNodeStats(
+            GetNodeDepth(node),
+            node->visit_count,
+            q_value,
+            prior,
+            puct_score + q_value,
+            node->IsExpanded()
+        );
+        
+        return puct_score + q_value;
+    }
+    
+    int GetNodeDepth(Node* node) const {
+        int depth = 0;
+        while (node->parent != nullptr) {
+            depth++;
+            node = node->parent;
+        }
+        return depth;
+    }
 };
 
 } // namespace alphazero

@@ -13,14 +13,18 @@ int main(int argc, char** argv) {
     auto config = alphazero::Config::ParseCommandLine(argc, argv);
     
     // Initialize logger
-    alphazero::Logger logger(config);
+    auto& logger = alphazero::Logger::GetInstance(config);
     
     // Initialize network manager and create network
     alphazero::NetworkManager network_manager(config);
     
     // Check CUDA availability before proceeding
     if (!torch::cuda::is_available()) {
-        logger.Log("ERROR: CUDA is not available. This program requires a CUDA-capable GPU for training.");
+        if (auto result = logger.Log("ERROR: CUDA is not available. This program requires a CUDA-capable GPU for training."); 
+            !result) {
+            std::cerr << "Failed to log error message" << std::endl;
+            return 1;
+        }
         return 1;
     }
     
@@ -38,22 +42,29 @@ int main(int argc, char** argv) {
     alphazero::Trainer trainer(config);
     
     for (int iter = 0; iter < config.num_iterations; ++iter) {
-        logger.Log("Starting iteration " + std::to_string(iter + 1) + "/" + std::to_string(config.num_iterations));
+        if (auto log_result = logger.LogFormat("Starting iteration {}/{}", iter + 1, config.num_iterations); !log_result) {
+            std::cerr << "Failed to log iteration start" << std::endl;
+        }
         
         // Set OpenMP parameters
         omp_set_num_threads(config.num_threads);
         
         // Generate self-play games in parallel
         std::vector<alphazero::GameExample> examples;
-        logger.Log("Generating " + std::to_string(config.episodes_per_iteration) + " self-play games using " + std::to_string(config.num_threads) + " threads...");
+        if (auto result = logger.LogFormat("Generating {} self-play games using {} threads...", 
+            config.episodes_per_iteration, config.num_threads); !result) {
+            std::cerr << "Failed to log game generation start" << std::endl;
+        }
         
         #pragma omp parallel for schedule(dynamic, 1) proc_bind(spread)
         for (int episode = 0; episode < config.episodes_per_iteration; ++episode) {
             if (episode % 10 == 0) {
                 #pragma omp critical
                 {
-                    logger.Log("[THREAD]" + std::to_string(omp_get_thread_num()) + " Game " +
-                        std::to_string(episode) + "/" + std::to_string(config.episodes_per_iteration) + "\r");
+                    if (auto result = logger.LogFormat("[THREAD]{} Game {}/{}", 
+                        omp_get_thread_num(), episode, config.episodes_per_iteration); !result) {
+                        std::cerr << "Failed to log thread progress" << std::endl;
+                    }
                 }
             }
             auto episode_examples = self_play.ExecuteEpisode();
@@ -62,7 +73,16 @@ int main(int argc, char** argv) {
                 examples.insert(examples.end(), episode_examples.begin(), episode_examples.end());
             }
         }
-        logger.Log("Completed self-play games generation.");
+        if (auto result = logger.Log("Completed self-play games generation."); !result) {
+            std::cerr << "Failed to log completion" << std::endl;
+        }
+        
+        // After self-play games are complete, log the MCTS statistics
+        if (auto log_result = logger.LogFormat("\nMCTS Statistics for Iteration {}:", iter + 1); !log_result) {
+            std::cerr << "Failed to log MCTS stats header" << std::endl;
+        }
+        self_play.GetStats().LogStatistics();
+        self_play.ClearStats();
         
         // Training phase (on GPU)
         trainer.Train(network, examples);
@@ -73,9 +93,10 @@ int main(int argc, char** argv) {
         alphazero::Evaluator evaluator(network, config);
         float win_rate = evaluator.EvaluateAgainstNetwork(network_manager.GetBestNetwork());
         
-        logger.Log("Iteration " + std::to_string(iter + 1) + " Summary:"
-                  + "\n  Win Rate vs Best: " + std::to_string(win_rate * 100) + "%"
-                  + "\n  Temperature: " + std::to_string(network_manager.GetCurrentTemperature()));
+        if (auto result = logger.LogFormat("Iteration {} Summary:\n  Win Rate vs Best: {}%\n  Temperature: {}", 
+            iter + 1, win_rate * 100, network_manager.GetCurrentTemperature()); !result) {
+            std::cerr << "Failed to log iteration summary" << std::endl;
+        }
         
         // Accept or reject new network
         if (!network_manager.AcceptNewNetwork(network, win_rate)) {
@@ -98,9 +119,10 @@ int main(int argc, char** argv) {
     float final_win_rate_best = final_evaluator.EvaluateAgainstNetwork(network_manager.GetBestNetwork());
     float final_win_rate_random = final_evaluator.EvaluateAgainstRandom();
     
-    logger.Log("Final Evaluation Results:\n  Win rate vs best: " + 
-               std::to_string(final_win_rate_best * 100) + "%\n  Win rate vs random: " + 
-               std::to_string(final_win_rate_random * 100) + "%");
+    if (auto result = logger.LogFormat("Final Evaluation Results:\n  Win rate vs best: {}%\n  Win rate vs random: {}%",
+        final_win_rate_best * 100, final_win_rate_random * 100); !result) {
+        std::cerr << "Failed to log final results" << std::endl;
+    }
     
     return 0;
 } 

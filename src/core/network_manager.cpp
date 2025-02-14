@@ -11,20 +11,16 @@ NetworkManager::NetworkManager(const Config& config)
 
 bool NetworkManager::AcceptNewNetwork(std::shared_ptr<NeuralNetwork> network, float win_rate) {
     if (win_rate > config_.acceptance_threshold) {
-        std::cout << "\n  ✓ New network accepted!" << std::endl;
         best_network_ = network;
-        current_iteration_++;
-        
-        if (win_rate > best_win_rate_) {
-            best_win_rate_ = win_rate;
-            best_iteration_ = current_iteration_;
-            SaveBestNetwork();
-        }
+        best_win_rate_ = win_rate;
+        best_iteration_ = current_iteration_;
+        SaveBestNetwork();
+        logger_.LogFormat("  ✓ New network accepted!");
         return true;
+    } else {
+        logger_.LogFormat("  × Network rejected");
+        return false;
     }
-    
-    std::cout << "\n  × Network rejected" << std::endl;
-    return false;
 }
 
 void NetworkManager::UpdateTemperature() {

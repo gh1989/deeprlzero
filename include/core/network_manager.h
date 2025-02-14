@@ -5,6 +5,7 @@
 #include "core/config.h"
 #include <memory>
 #include <string>
+#include "core/logger.h"
 
 namespace alphazero {
 
@@ -30,6 +31,7 @@ class NetworkManager {
   float current_temperature_;
   int best_iteration_ = 0;
   int current_iteration_ = 0;
+  Logger& logger_ = Logger::GetInstance();
 };
 
 }  // namespace alphazero

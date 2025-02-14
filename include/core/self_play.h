@@ -4,6 +4,7 @@
 #include "core/game.h"
 #include "core/mcts.h"
 #include "core/config.h"
+#include "core/mcts_stats.h"
 #include <vector>
 #include <tuple>
 #include <random>
@@ -22,10 +23,14 @@ class SelfPlay {
   
   std::vector<GameExample> ExecuteEpisode();
   
+  const MCTSStats& GetStats() const { return mcts_stats_; }
+  void ClearStats() { mcts_stats_ = MCTSStats(); }
+  
  private:
   std::shared_ptr<NeuralNetwork> network_;
   const Config& config_;
   std::mt19937 rng_{std::random_device{}()};
+  MCTSStats mcts_stats_;
 };
 
 }  // namespace alphazero

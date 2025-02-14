@@ -48,7 +48,6 @@ set(SOURCES
     src/core/mcts.cpp
     src/core/self_play.cpp
     src/core/trainer.cpp
-    src/core/logger.cpp
     src/core/evaluator.cpp
 )
 
