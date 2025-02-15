@@ -3,6 +3,7 @@
 #include "core/neural_network.h"
 #include "core/network_manager.h"
 #include "core/tictactoe.h"
+#include "core/thread.h"
 #include <torch/torch.h>
 #include <cmath>
 #include <vector>
@@ -13,6 +14,11 @@
 #include "core/self_play.h"
 #include "core/logger.h"
 
+alphazero::Config TestConfig() {
+    alphazero::Config config;
+    config.model_path = "test_model";
+    return config;
+}
 
 void PrintTestResult(const std::string& test_name, bool passed) {
     std::cout << test_name << ": " << (passed ? "PASSED" : "FAILED") << "\n";
@@ -106,7 +112,7 @@ void TestComputePolicyLoss() {
   
   // Create a Trainer instance.
   auto network = std::make_shared<alphazero::NeuralNetwork>();
-  alphazero::Config config;
+  alphazero::Config config = TestConfig();
   alphazero::Trainer trainer(network, config);
   
   // --- Test 1 ---
@@ -139,7 +145,7 @@ void TestComputePolicyLoss() {
 void TestComputeValueLoss() {
   bool passed = true;
   auto network = std::make_shared<alphazero::NeuralNetwork>();
-  alphazero::Config config;
+  alphazero::Config config = TestConfig();
   alphazero::Trainer trainer(network, config);
   
   // --- Test 1 ---
@@ -191,7 +197,7 @@ void CheckNetworkUpdates() {
   auto value_target = torch::tensor({1.0f}, torch::kFloat);
   
   // Create a Trainer instance.
-  alphazero::Config config;
+  alphazero::Config config = TestConfig();
   alphazero::Trainer trainer(network, config);
   
   // Compute network predictions.
@@ -235,7 +241,7 @@ void TestExecuteEpisodeSelfPlay() {
   std::cout << "Running TestExecuteEpisodeSelfPlay..." << std::endl;
 
   // Create a configuration instance.
-  alphazero::Config config;
+  alphazero::Config config = TestConfig();
   // (Optional: tweak config fields if needed, for example:
   //  config.temperature = 1.0f; )
 
@@ -323,7 +329,7 @@ void PrintSelfPlayEpisode() {
   std::cout << "Printing a self-play episode:" << std::endl;
 
   // Create a configuration instance.
-  alphazero::Config config;
+  alphazero::Config config = TestConfig();
   // Optionally adjust any configuration parameters
   // e.g., config.temperature = 1.0f;
 
@@ -360,7 +366,7 @@ void PrintSelfPlayEpisode() {
 // TestMCTSExplorationStats verifies that MCTS properly records its exploration statistics.
 void TestMCTSExplorationStats() {
   // Create a dummy configuration.
-  alphazero::Config config;
+  alphazero::Config config = TestConfig();
   // (Initialize config fields if necessary.)
 
   // Create a neural network instance.
@@ -411,14 +417,6 @@ void TestNetworkManager() {
     network_manager.AcceptOrRejectNewNetwork(network_manager.GetBestNetwork(), eval_stats);
 }
 
-//
-// TestMergeAndClearStats
-//
-// This test simulates the following scenario:
-//  1. A move is played and its stats are available as move_stats.
-//  2. The move_stats are merged into an aggregate stats object (mcts_stats_).
-//  3. The move stats are then cleared for the next move.
-//
 void TestMergeAndClearStats() {
   // Create an aggregator MCTSStats object (initially all values are zero).
   alphazero::MCTSStats aggregate_stats;
@@ -439,6 +437,65 @@ void TestMergeAndClearStats() {
   std::cout << "TestMergeAndClearStats passed!" << std::endl;
 }
 
+void TestMCTSHasStats() {
+    alphazero::Config config = TestConfig();
+    auto network = std::make_shared<alphazero::NeuralNetwork>(1, 16, 9, 1);
+    alphazero::MCTS mcts(network, config);
+    alphazero::TicTacToe game;
+    mcts.Search(game, mcts.GetRoot());
+    auto stats = mcts.GetStats();
+    stats.LogStatistics();
+}
+
+void TestSelfPlayStats() {
+    alphazero::Config config = TestConfig();
+    auto network = std::make_shared<alphazero::NeuralNetwork>(1, 16, 9, 1);
+    alphazero::SelfPlay self_play(network, config);
+    auto stats = self_play.GetStats();
+    stats.LogStatistics();
+}
+
+void TestParallelFor() {
+  alphazero::Config config = TestConfig();
+  auto network = std::make_shared<alphazero::NeuralNetwork>(1, 16, 9, 1);
+  std::vector<alphazero::GameExample> examples;
+
+  // Aggregated statistics from all episodes.
+  alphazero::MCTSStats aggregated_stats;
+
+  alphazero::ParallelFor(config.episodes_per_iteration, [&](int episode) {
+    // Get a thread-local SelfPlay instance using the factory function.
+    auto &local_self_play = alphazero::GetThreadLocalInstance<alphazero::SelfPlay>([&]() {
+      return new alphazero::SelfPlay(network, config);
+    });
+
+    // Execute a self-play episode.
+    auto episode_examples = local_self_play.ExecuteEpisode();
+
+    // In the critical section, merge the thread's stats into the aggregator.
+    #ifdef _OPENMP
+    #pragma omp critical
+    #endif
+    {
+      examples.insert(examples.end(),
+                      episode_examples.begin(),
+                      episode_examples.end());
+      // Get a local copy of the current stats from the self-play instance.
+      alphazero::MCTSStats local_stats = local_self_play.GetStats();
+      // Merge the local stats into the aggregated stats.
+      aggregated_stats.MergeStats(local_stats);
+      // Clear the local stats so that subsequent episodes start fresh.
+      local_self_play.ClearStats();
+    }
+  });
+
+  std::cout << "Episodes: " << examples.size() 
+            << " Episodes per iteration: " 
+            << config.episodes_per_iteration << std::endl;
+  aggregated_stats.LogStatistics();
+  std::cout << "TestParallelFor passed!" << std::endl;
+}
+
 int main() {
     try {
         std::cout << "Starting MCTS Tests\n";
@@ -455,6 +512,9 @@ int main() {
         TestSaveTestNetwork();
         TestNetworkManager();
         TestMergeAndClearStats();
+        TestSelfPlayStats();
+        TestMCTSHasStats();
+        TestParallelFor();
         std::cout << "\nAll tests completed\n";
         return 0;
     } catch (const std::exception& e) {

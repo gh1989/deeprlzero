@@ -22,7 +22,6 @@ public:
     void RecordNodeStats(int depth, int visits, float q_value, float prior, float puct_score, bool explored) {
         Logger& logger = Logger::GetInstance();
         stats_.push_back({depth, visits, q_value, prior, puct_score, explored});
-        logger.LogFormat("Recorded stats: Depth={}, Visits={}", depth, visits);  
     }
 
     int GetNumSimulations() const {

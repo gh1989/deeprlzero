@@ -2,6 +2,7 @@
 #include <memory>
 #include <vector>
 #include <torch/torch.h>
+#include <mutex>
 #include "core/logger.h"
 
 namespace alphazero {
@@ -120,6 +121,11 @@ class NeuralNetwork : public torch::nn::Module {
   torch::nn::BatchNorm2d value_bn{nullptr};
   torch::nn::Linear value_fc1{nullptr};
   torch::nn::Linear value_fc2{nullptr};
+
+  torch::Tensor cached_policy_;   
+  torch::Tensor cached_value_;
+  std::mutex forward_mutex_;
 };
 
-}  // namespace alphazero 
+}  // namespace alphazero
+

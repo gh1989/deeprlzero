@@ -5,6 +5,7 @@
 #include "core/evaluator.h"
 #include "core/config.h"
 #include "core/logger.h"
+#include "core/thread.h"
 #include <iostream>
 #include <fstream>
 #include <omp.h>
@@ -41,6 +42,9 @@ int main(int argc, char** argv) {
     alphazero::SelfPlay self_play(network, config);
     alphazero::Trainer trainer(network, config);
 
+  // Aggregated statistics from all episodes.
+  alphazero::MCTSStats aggregated_stats;
+
     for (int iter = 0; iter < config.num_iterations; ++iter) {
         if (auto log_result = logger.LogFormat("Starting iteration {}/{}", iter + 1, config.num_iterations); !log_result) {
             std::cerr << "Failed to log iteration start" << std::endl;
@@ -56,25 +60,34 @@ int main(int argc, char** argv) {
             std::cerr << "Failed to log game generation start" << std::endl;
         }
         
-        #pragma omp parallel for schedule(dynamic, 1) proc_bind(spread)
-        for (int episode = 0; episode < config.episodes_per_iteration; ++episode) {
-            if (episode % 10 == 0) {
-                #pragma omp critical
-                {
-                    /*
-                    if (auto result = logger.LogFormat("[THREAD]{} Game {}/{}", 
-                        omp_get_thread_num(), episode, config.episodes_per_iteration); !result) {
-                        std::cerr << "Failed to log thread progress" << std::endl;
-                    }
-                    */
-                }
-            }
-            auto episode_examples = self_play.ExecuteEpisode();
-            #pragma omp critical
-            {
-                examples.insert(examples.end(), episode_examples.begin(), episode_examples.end());
-            }
-        }
+
+
+  alphazero::ParallelFor(config.episodes_per_iteration, [&](int episode) {
+    // Get a thread-local SelfPlay instance using the factory function.
+    auto &local_self_play = alphazero::GetThreadLocalInstance<alphazero::SelfPlay>([&]() {
+      return new alphazero::SelfPlay(network, config);
+    });
+
+    // Execute a self-play episode.
+    auto episode_examples = local_self_play.ExecuteEpisode();
+
+    // In the critical section, merge the thread's stats into the aggregator.
+    #ifdef _OPENMP
+    #pragma omp critical
+    #endif
+    {
+      examples.insert(examples.end(),
+                      episode_examples.begin(),
+                      episode_examples.end());
+      // Get a local copy of the current stats from the self-play instance.
+      alphazero::MCTSStats local_stats = local_self_play.GetStats();
+      // Merge the local stats into the aggregated stats.
+      aggregated_stats.MergeStats(local_stats);
+      // Clear the local stats so that subsequent episodes start fresh.
+      local_self_play.ClearStats();
+    }
+  });
+
         if (auto result = logger.Log("Completed self-play games generation."); !result) {
             std::cerr << "Failed to log completion" << std::endl;
         }
@@ -83,7 +96,6 @@ int main(int argc, char** argv) {
         if (auto log_result = logger.LogFormat("\nMCTS Statistics for Iteration {}:", iter + 1); !log_result) {
             std::cerr << "Failed to log MCTS stats header" << std::endl;
         }
-        self_play.GetStats().LogStatistics();
         self_play.ClearStats();
         
         // Training phase (on GPU)
@@ -126,5 +138,7 @@ int main(int argc, char** argv) {
         std::cerr << "Failed to log final results" << std::endl;
     }
     
+    aggregated_stats.LogStatistics();
+
     return 0;
 } 

@@ -11,6 +11,7 @@ SelfPlay::SelfPlay(std::shared_ptr<NeuralNetwork> network, const Config& config)
     : network_(network), config_(config) {
     network_->to(torch::kCPU);
     network_->eval();
+    mcts_stats_ = MCTSStats();
 }
 
 std::vector<GameExample> SelfPlay::ExecuteEpisode() {

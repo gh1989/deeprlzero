@@ -59,6 +59,7 @@ std::vector<float> MCTS::GetActionProbabilities(const Game& state, float tempera
 }
 
 void MCTS::Search(Game& state, Node* node) {
+
     if (state.IsTerminal()) {
         float value = state.GetGameResult();
         Backpropagate(node, value);
@@ -66,6 +67,7 @@ void MCTS::Search(Game& state, Node* node) {
     }
     
     if (!node->IsExpanded()) {
+
         auto [policy, value] = GetPolicyValue(state);
         auto valid_moves = state.GetValidMoves();
         
@@ -78,6 +80,10 @@ void MCTS::Search(Game& state, Node* node) {
             child->prior = policy[move];
             child->parent = node;
             child->action = move;
+            child->depth = node->depth + 1;
+            
+            stats_.RecordNodeStats(child->depth, 0, 0.0f, child->prior, 0.0f, false);
+
             node->children[move] = std::move(child);
         }
         

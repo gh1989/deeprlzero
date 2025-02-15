@@ -18,7 +18,8 @@ struct Node {
     std::vector<std::unique_ptr<Node>> children;
     Node* parent = nullptr;
     int action = -1;
-    
+    int depth = 0;
+
     explicit Node(const Config& config) 
         : parent(nullptr), visit_count(0), value_sum(0.0f), prior(0.0f), action(-1) {
         children.resize(config.board_size);
@@ -35,6 +36,11 @@ struct Node {
         }
         return false;
     }
+};
+
+struct SearchStats {
+  int num_searches = 0;
+  int num_expansions = 0;
 };
 
 class MCTS {

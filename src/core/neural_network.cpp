@@ -50,27 +50,30 @@ NeuralNetwork::NeuralNetwork(int64_t input_channels,
 }
 
 std::pair<torch::Tensor, torch::Tensor> NeuralNetwork::forward(torch::Tensor x) {
-    // Initial convolution and batch norm
-    x = torch::relu(bn(conv(x)));
-    
-    // Residual blocks
-    for (const auto& block : residual_blocks) {
-        x = block->forward(x);
-    }
-    
-    // Policy head
-    auto policy = policy_bn(policy_conv(x));
-    policy = torch::relu(policy);
-    policy = policy_fc(policy.flatten(1));  // flatten all dimensions after batch
-    policy = torch::softmax(policy, /*dim=*/1);
-    
-    // Value head - ensure proper scaling
-    auto value = value_bn(value_conv(x));
-    value = torch::relu(value);
-    value = torch::relu(value_fc1(value.flatten(1)));
-    value = torch::tanh(value_fc2(value));  // Ensure tanh activation is working
-    
-    return {policy, value};
+  std::lock_guard<std::mutex> lock(forward_mutex_);
+  if (cached_policy_.defined() && cached_policy_.numel() > 0) {
+    cached_policy_.resize_(0);
+  }
+
+  // Process input through the network as usual.
+  x = torch::relu(bn(conv(x)));
+  for (const auto &block : residual_blocks) {
+    x = block->forward(x);
+  }
+  
+  // Policy head
+  auto policy = policy_bn(policy_conv(x));
+  policy = torch::relu(policy);
+  policy = policy_fc(policy.flatten(1));
+  policy = torch::softmax(policy, /*dim=*/1);
+  
+  // Value head
+  auto value = value_bn(value_conv(x));
+  value = torch::relu(value);
+  value = torch::relu(value_fc1(value.flatten(1)));
+  value = torch::tanh(value_fc2(value));
+  
+  return {policy, value};
 }
 
 }  // namespace alphazero 
