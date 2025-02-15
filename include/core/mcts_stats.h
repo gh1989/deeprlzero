@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include "core/logger.h"
+#include <iostream>
 
 namespace alphazero {
 
@@ -19,7 +20,19 @@ public:
     };
 
     void RecordNodeStats(int depth, int visits, float q_value, float prior, float puct_score, bool explored) {
+        Logger& logger = Logger::GetInstance();
         stats_.push_back({depth, visits, q_value, prior, puct_score, explored});
+        logger.LogFormat("Recorded stats: Depth={}, Visits={}", depth, visits);  
+    }
+
+    int GetNumSimulations() const {
+        return stats_.size();
+    }
+
+    int GetNumExpandedNodes() const {
+        return std::count_if(stats_.begin(), stats_.end(), [](const NodeStats& stat) {
+            return stat.was_explored;
+        });
     }
 
     [[nodiscard]] std::expected<void, Logger::Error> LogStatistics() const {
@@ -88,6 +101,10 @@ public:
         }
 
         return {};
+    }
+
+    void MergeStats(const MCTSStats& other) {
+        stats_.insert(stats_.end(), other.stats_.begin(), other.stats_.end());
     }
 
     private:

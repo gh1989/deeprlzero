@@ -2,6 +2,7 @@
 #include <memory>
 #include <vector>
 #include <torch/torch.h>
+#include "core/logger.h"
 
 namespace alphazero {
 
@@ -25,6 +26,7 @@ class ResidualBlock : public torch::nn::Module {
  private:
   torch::nn::Conv2d conv1{nullptr}, conv2{nullptr};
   torch::nn::BatchNorm2d bn1{nullptr}, bn2{nullptr};
+
 };
 
 class NeuralNetwork : public torch::nn::Module {
@@ -34,7 +36,7 @@ class NeuralNetwork : public torch::nn::Module {
                 int64_t num_actions = 9,
                 int64_t num_residual_blocks = 3);
 
-  std::pair<torch::Tensor, torch::Tensor> forward(torch::Tensor x);
+  virtual std::pair<torch::Tensor, torch::Tensor> forward(torch::Tensor x);
 
   // Fix return type to match parent class
   std::shared_ptr<torch::nn::Module> clone(const torch::optional<torch::Device>& device = torch::nullopt) const override {

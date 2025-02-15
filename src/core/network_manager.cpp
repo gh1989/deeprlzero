@@ -9,10 +9,10 @@ NetworkManager::NetworkManager(const Config& config)
     : config_(config), 
       current_temperature_(config.initial_temperature) {}
 
-bool NetworkManager::AcceptNewNetwork(std::shared_ptr<NeuralNetwork> network, float win_rate) {
-    if (win_rate > config_.acceptance_threshold) {
+bool NetworkManager::AcceptOrRejectNewNetwork(std::shared_ptr<NeuralNetwork> network, EvaluationStats evaluation_stats) {
+    if (evaluation_stats.IsBetterThan(best_evaluation_stats_)) {
         best_network_ = network;
-        best_win_rate_ = win_rate;
+        best_evaluation_stats_ = evaluation_stats;
         best_iteration_ = current_iteration_;
         SaveBestNetwork();
         logger_.LogFormat("  ✓ New network accepted!");
@@ -47,7 +47,6 @@ std::shared_ptr<NeuralNetwork> NetworkManager::CreateInitialNetwork() {
         9,  // num_actions for TicTacToe
         config_.num_residual_blocks
     );
-    best_network_ = network;
     return network;
 }
 

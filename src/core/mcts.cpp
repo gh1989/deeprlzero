@@ -13,9 +13,7 @@ namespace alphazero {
 
 MCTS::MCTS(std::shared_ptr<NeuralNetwork> network, const Config& config)
     : network_(network), config_(config) {
-    if (!network_) {
-        throw std::invalid_argument("Neural network cannot be null");
-    }
+    assert(network_ != nullptr && "Neural network cannot be null");
     root_ = std::make_unique<Node>(config);
 }
 

@@ -2,11 +2,27 @@ cmake_minimum_required(VERSION 3.18)
 set(CMAKE_CUDA_COMPILER /usr/local/cuda-12.6/bin/nvcc)
 project(AlphaZero LANGUAGES CXX CUDA)
 
+# If no build type is specified, default to Debug.
+if (NOT CMAKE_BUILD_TYPE)
+  message(STATUS "No build type specified. Defaulting to Debug.")
+  set(CMAKE_BUILD_TYPE Debug CACHE STRING
+      "Choose the type of build (Debug, Release, RelWithDebInfo, MinSizeRel)"
+      FORCE)
+endif()
+
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
+# If building a Release version, append debugging symbols to the flags.
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+  message(STATUS "Release build detected; appending debug symbols (-g) to compiler flags.")
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -g")
+  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -g")
+endif()
+
 # Set the C++ standard and compiler flags
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -g")
-set(CMAKE_BUILD_TYPE Release)
 
 # CUDA settings
 set(CMAKE_CUDA_ARCHITECTURES 75)
@@ -17,7 +33,7 @@ set(CUDA_TOOLKIT_ROOT_DIR "/usr/local/cuda-12.6")
 include_directories("${CUDA_TOOLKIT_ROOT_DIR}/include")
 link_directories("${CUDA_TOOLKIT_ROOT_DIR}/lib64")
 
-# Get PyTorch path and make sure it's properly formatted
+# Get PyTorch path and format it appropriately.
 execute_process(
     COMMAND python -c "import torch; import os; print(os.path.dirname(torch.__file__))"
     OUTPUT_VARIABLE TORCH_PATH
@@ -39,7 +55,7 @@ link_directories(${TORCH_PATH}/lib)
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
-# Source files
+# Source files for the main library
 set(SOURCES
     src/core/game.cpp
     src/core/tictactoe.cpp
@@ -51,23 +67,20 @@ set(SOURCES
     src/core/evaluator.cpp
 )
 
-# Create the main library
+# Create the main library target
 add_library(alphazero_lib ${SOURCES})
-
-# Link dependencies
 target_link_libraries(alphazero_lib 
     PRIVATE 
     ${TORCH_LIBRARIES}
     OpenMP::OpenMP_CXX
     ${CUDA_LIBRARIES}
 )
-
 target_include_directories(alphazero_lib 
     PRIVATE 
     ${CMAKE_SOURCE_DIR}/include
 )
 
-# Add the main training executable
+# Build the main training executable
 add_executable(train_alphazero src/main.cpp)
 target_link_libraries(train_alphazero 
     PRIVATE 
@@ -77,26 +90,33 @@ target_link_libraries(train_alphazero
 )
 
 # OpenMP support
-find_package(OpenMP)
+find_package(OpenMP REQUIRED)
 if(OpenMP_CXX_FOUND)
     target_link_libraries(alphazero_lib PUBLIC OpenMP::OpenMP_CXX)
 endif()
+target_link_libraries(train_alphazero PRIVATE OpenMP::OpenMP_CXX)
 
-# Set output directory
-set_target_properties(
-    train_alphazero
-    PROPERTIES
+# Build a standalone executable from your converted troubleshooting.cpp.
+# (Note: We no longer want to use Google Test here.)
+add_executable(mcts_executable troubleshooting/troubleshooting.cpp)
+target_link_libraries(mcts_executable
+    PRIVATE
+    alphazero_lib
+    ${TORCH_LIBRARIES}
+    OpenMP::OpenMP_CXX
+)
+
+# Set output directories for targets
+set_target_properties(alphazero_lib PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+set_target_properties(train_alphazero mcts_executable PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
-find_package(OpenMP REQUIRED)
-target_link_libraries(train_alphazero PRIVATE OpenMP::OpenMP_CXX)
-
-# Enable testing
-enable_testing()
-
 # Debug information
-message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "PyTorch cmake path: ${CMAKE_PREFIX_PATH}")
 message(STATUS "Torch libraries: ${TORCH_LIBRARIES}")
 message(STATUS "C++ compiler: ${CMAKE_CXX_COMPILER}")

@@ -106,7 +106,7 @@ std::vector<GameExample> SelfPlay::ExecuteEpisode() {
         
         // After each move, accumulate the stats
         const MCTSStats& move_stats = mcts.GetStats();
-        mcts_stats_ = move_stats;  // This will aggregate the stats
+        mcts_stats_.MergeStats(move_stats);  // Merge stats instead of replacing
         mcts.ClearStats();  // Clear for next move
     }
     

@@ -27,10 +27,10 @@ int main(int argc, char** argv) {
         }
         return 1;
     }
-    
+
+    // Create an initial network then load the best if possible.    
     auto network = network_manager.CreateInitialNetwork();
-    
-    // Try to load existing best network
+    network_manager.SetBestNetwork(network);
     network_manager.LoadBestNetwork();
     
     // After loading or creating the network
@@ -39,8 +39,8 @@ int main(int argc, char** argv) {
 
     // Initialize self-play and trainer
     alphazero::SelfPlay self_play(network, config);
-    alphazero::Trainer trainer(config);
-    
+    alphazero::Trainer trainer(network, config);
+
     for (int iter = 0; iter < config.num_iterations; ++iter) {
         if (auto log_result = logger.LogFormat("Starting iteration {}/{}", iter + 1, config.num_iterations); !log_result) {
             std::cerr << "Failed to log iteration start" << std::endl;
@@ -61,10 +61,12 @@ int main(int argc, char** argv) {
             if (episode % 10 == 0) {
                 #pragma omp critical
                 {
+                    /*
                     if (auto result = logger.LogFormat("[THREAD]{} Game {}/{}", 
                         omp_get_thread_num(), episode, config.episodes_per_iteration); !result) {
                         std::cerr << "Failed to log thread progress" << std::endl;
                     }
+                    */
                 }
             }
             auto episode_examples = self_play.ExecuteEpisode();
@@ -91,15 +93,15 @@ int main(int argc, char** argv) {
         network->to(torch::kCPU);
         network->eval();
         alphazero::Evaluator evaluator(network, config);
-        float win_rate = evaluator.EvaluateAgainstNetwork(network_manager.GetBestNetwork());
+        alphazero::EvaluationStats win_rate = evaluator.EvaluateAgainstNetwork(network_manager.GetBestNetwork());
         
-        if (auto result = logger.LogFormat("Iteration {} Summary:\n  Win Rate vs Best: {}%\n  Temperature: {}", 
-            iter + 1, win_rate * 100, network_manager.GetCurrentTemperature()); !result) {
+        if (auto result = logger.LogFormat("Iteration {} Summary:\n  Win Rate vs Best: {}\n  Temperature: {}", 
+            iter + 1, win_rate.WinStats(), network_manager.GetCurrentTemperature()); !result) {
             std::cerr << "Failed to log iteration summary" << std::endl;
         }
         
         // Accept or reject new network
-        if (!network_manager.AcceptNewNetwork(network, win_rate)) {
+        if (!network_manager.AcceptOrRejectNewNetwork(network, win_rate)) {
             network = network_manager.GetBestNetwork();
         }
         
@@ -116,11 +118,11 @@ int main(int argc, char** argv) {
     network->to(torch::kCPU);
     network->eval();
     alphazero::Evaluator final_evaluator(network, config);
-    float final_win_rate_best = final_evaluator.EvaluateAgainstNetwork(network_manager.GetBestNetwork());
-    float final_win_rate_random = final_evaluator.EvaluateAgainstRandom();
+    alphazero::EvaluationStats final_win_rate_best = final_evaluator.EvaluateAgainstNetwork(network_manager.GetBestNetwork());
+    alphazero::EvaluationStats final_win_rate_random = final_evaluator.EvaluateAgainstRandom();
     
     if (auto result = logger.LogFormat("Final Evaluation Results:\n  Win rate vs best: {}%\n  Win rate vs random: {}%",
-        final_win_rate_best * 100, final_win_rate_random * 100); !result) {
+        final_win_rate_best.WinStats(), final_win_rate_random.WinStats()); !result) {
         std::cerr << "Failed to log final results" << std::endl;
     }
     

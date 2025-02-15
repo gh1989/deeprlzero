@@ -47,7 +47,7 @@ public:
     void ResetRoot();
 
     std::vector<Game*> evaluation_queue_;
-    
+    Node* GetRoot() const { return root_.get(); }
     // Batch evaluation method
     std::vector<std::pair<std::vector<float>, float>> 
     BatchEvaluate(const std::vector<Game*>& states);
@@ -55,12 +55,14 @@ public:
     // Add stats getter
     const MCTSStats& GetStats() const { return stats_; }
     void ClearStats() { stats_ = MCTSStats(); }
-
-private:
+    float Backpropagate(Node* node, float value);
     void Search(Game& state, Node* node);
+    
+private:
+
     std::pair<int, Node*> SelectAction(Node* node, const Game& state);
     void ExpandNode(Node* node, const Game& state);
-    float Backpropagate(Node* node, float value);
+
     std::pair<std::vector<float>, float> GetPolicyValue(const Game& state);
     
     std::shared_ptr<NeuralNetwork> network_;

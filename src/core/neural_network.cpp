@@ -15,7 +15,7 @@ torch::Tensor ResidualBlock::forward(torch::Tensor x) {
   auto identity = x;
   x = torch::relu(bn1(conv1(x)));
   x = bn2(conv2(x));
-  x += identity;
+  x = x + identity;
   x = torch::relu(x);
   return x;
 }
