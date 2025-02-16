@@ -5,6 +5,7 @@
 #include "core/mcts.h"
 #include "core/config.h"
 #include "core/mcts_stats.h"
+#include "core/thread.h"
 #include <vector>
 #include <tuple>
 #include <random>
@@ -28,6 +29,30 @@ class SelfPlay {
     network_->eval();
     mcts_stats_ = MCTSStats();
 }
+
+  std::vector<GameEpisode> ExecuteEpisodesParallel() {       
+    omp_set_num_threads(config_.num_threads);
+    std::vector<GameEpisode> episodes;
+    ParallelFor(config_.episodes_per_iteration, [&](int episode_idx) {
+      // Get a thread-local SelfPlay instance using the factory function.
+      auto &local_self_play = GetThreadLocalInstance<SelfPlay<GameType>>(
+          [&]() {
+        return new SelfPlay<GameType>(network_, config_);
+      });
+   
+      GameEpisode episode = local_self_play.ExecuteEpisode();
+
+      // Enter critical section to safely update shared data.
+      #ifdef _OPENMP
+      #pragma omp critical
+      #endif
+          {
+            episodes.push_back(std::move(episode));
+          }
+      });
+
+      return episodes;
+  }
 
   GameEpisode ExecuteEpisode() {
       network_->to(torch::kCPU);
