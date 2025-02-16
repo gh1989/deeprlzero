@@ -65,6 +65,7 @@ set(SOURCES
     src/core/self_play.cpp
     src/core/trainer.cpp
     src/core/evaluator.cpp
+    src/core/utils.cpp
 )
 
 # Create the main library target
@@ -106,12 +107,23 @@ target_link_libraries(mcts_executable
     OpenMP::OpenMP_CXX
 )
 
+# Add the tune_parameters executable
+#add_executable(tune_parameters tuning/tune_parameters.cpp)
+
+# Link it to your project library and Torch libraries.
+# Ensure that ${TORCH_LIBRARIES} is defined (e.g., via find_package(Torch REQUIRED))
+#target_link_libraries(tune_parameters PRIVATE alphazero_lib ${TORCH_LIBRARIES})
+
+# Optionally, enforce a C++ standard (e.g., C++17)
+#set_property(TARGET tune_parameters PROPERTY CXX_STANDARD 17)
+
 # Set output directories for targets
 set_target_properties(alphazero_lib PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
+#set_target_properties(train_alphazero mcts_executable tune_parameters PROPERTIES
 set_target_properties(train_alphazero mcts_executable PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )

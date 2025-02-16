@@ -21,6 +21,13 @@ std::vector<int> TicTacToe::GetValidMoves() const {
     return valid_moves;
 }
 
+void TicTacToe::Reset() {
+    for (auto& row : board_) {
+        row.fill(0);
+    }
+    current_player_ = 1;
+}
+
 void TicTacToe::MakeMove(int move) {
     int row = move / kBoardSize;
     int col = move % kBoardSize;

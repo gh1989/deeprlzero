@@ -1,4 +1,6 @@
-#pragma once
+#ifndef ALPHAZERO_CORE_NEURAL_NETWORK_H_
+#define ALPHAZERO_CORE_NEURAL_NETWORK_H_
+
 #include <memory>
 #include <vector>
 #include <torch/torch.h>
@@ -129,3 +131,4 @@ class NeuralNetwork : public torch::nn::Module {
 
 }  // namespace alphazero
 
+#endif  // ALPHAZERO_CORE_NEURAL_NETWORK_H_

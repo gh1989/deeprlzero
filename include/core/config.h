@@ -15,18 +15,19 @@ class Config {
   float prior_alpha = 0.75f;
   
   // Temperature annealing
-  float initial_temperature = 1.0f;
+  float initial_temperature = 1.5f;
   float min_temperature = 0.1f;
-  float temperature_decay = 0.95f;
+  float temperature_decay = 1.00f;
   
   // MCTS configuration
   int num_simulations = 100;
   float c_puct = 3.0;
-  float temperature = 1.0;
+  float temperature = 1.5;
   int board_size = 9;        
-  int mcts_batch_size = 64;  // For MCTS batch evaluations
-  float gamma_alpha = 0.3f;      // Gamma distribution alpha parameter
-  float gamma_beta = 1.0f;       // Gamma distribution beta parameter
+  int action_size = 9;
+  int mcts_batch_size = 64; 
+  float gamma_alpha = 0.3f; 
+  float gamma_beta = 1.0f;  
     
   // Training configuration
   int training_batch_size = 2048;  
@@ -44,6 +45,8 @@ class Config {
   int num_threads = 24;
   float l2_reg = 1e-4;
   float dropout_rate = 0.3;
+
+  float loss_threshold = 0.25f;
 
   static Config ParseCommandLine(int argc, char** argv) {
     Config config;
@@ -66,6 +69,8 @@ class Config {
         config.num_simulations = std::stoi(argv[++i]);
       } else if (arg == "-p" || arg == "--cpuct") {
         config.c_puct = std::stof(argv[++i]);
+      } else if (arg == "-d" || arg == "--decay") {
+        config.temperature_decay = std::stof(argv[++i]);
       } else if (arg == "-t" || arg == "--temperature") {
         config.temperature = std::stof(argv[++i]);
       } else if (arg == "-b" || arg == "--batch-size") {
@@ -80,6 +85,8 @@ class Config {
         config.model_path = argv[++i];
       } else if (arg == "-n" || arg == "--eval-games") {
         config.num_evaluation_games = std::stoi(argv[++i]);
+      } else if (arg == "-l" || arg == "--loss-threshold") {
+        config.loss_threshold = std::stof(argv[++i]);
       } else if (arg == "-a" || arg == "--acceptance-threshold") {
         config.acceptance_threshold = std::stof(argv[++i]);
       } else if (arg == "-h" || arg == "--help") {

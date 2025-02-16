@@ -47,8 +47,8 @@ class MCTS {
 public:
     MCTS(std::shared_ptr<NeuralNetwork> network, const Config& config);
     
-    std::vector<float> GetActionProbabilities(const Game& state, float temperature = 1.0f);
-    int SelectMove(const Game& state, float temperature = 0.0f);
+    std::vector<float> GetActionProbabilities(const Game* state, float temperature = 1.0f);
+    int SelectMove(const Game* state, float temperature = 0.0f);
 
     void ResetRoot();
 
@@ -62,14 +62,15 @@ public:
     const MCTSStats& GetStats() const { return stats_; }
     void ClearStats() { stats_ = MCTSStats(); }
     float Backpropagate(Node* node, float value);
-    void Search(Game& state, Node* node);
-    
+    void Search(const Game* state, Node* node);
+    float FullSearch(const Game* state, Node* node);
+
 private:
 
-    std::pair<int, Node*> SelectAction(Node* node, const Game& state);
-    void ExpandNode(Node* node, const Game& state);
+    std::pair<int, Node*> SelectAction(Node* node, const Game* state);
+    void ExpandNode(Node* node, const Game* state);
 
-    std::pair<std::vector<float>, float> GetPolicyValue(const Game& state);
+    std::pair<std::vector<float>, float> GetPolicyValue(const Game* state);
     
     std::shared_ptr<NeuralNetwork> network_;
     const Config& config_;
@@ -79,7 +80,7 @@ private:
     int last_move_ = -1;
     MCTSStats stats_;
     
-    float CalculatePUCTScore(Node* node, float prior, const Game& state) {
+    float CalculatePUCTScore(Node* node, float prior) {
         float puct_score = config_.c_puct * prior * 
             (std::sqrt(node->visit_count + 1) / (1 + node->visit_count));
         float q_value = node->GetValue();

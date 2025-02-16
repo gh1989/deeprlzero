@@ -16,6 +16,7 @@ class TicTacToe : public Game {
   
   virtual std::vector<int> GetValidMoves() const override;
   void MakeMove(int move) override;
+  void Reset() override;
   float GetGameResult() const override;
   bool IsTerminal() const override;
   int GetCurrentPlayer() const override { return current_player_; }

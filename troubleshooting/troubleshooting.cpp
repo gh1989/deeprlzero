@@ -4,6 +4,7 @@
 #include "core/network_manager.h"
 #include "core/tictactoe.h"
 #include "core/thread.h"
+#include "core/utils.h"
 #include <torch/torch.h>
 #include <cmath>
 #include <vector>
@@ -14,14 +15,19 @@
 #include "core/self_play.h"
 #include "core/logger.h"
 
-alphazero::Config TestConfig() {
-    alphazero::Config config;
-    config.model_path = "test_model";
+namespace alphazero {
+
+Config TestConfig() {
+    Config config;
+    config.learning_rate = 0.001f;
+    config.l2_reg = 1e-4f;
+    config.temperature = 1.0f;
+    config.num_evaluation_games = 10;
     return config;
 }
 
 void PrintTestResult(const std::string& test_name, bool passed) {
-    std::cout << test_name << ": " << (passed ? "PASSED" : "FAILED") << "\n";
+    std::cout << test_name << ": " << (passed ? "PASSED" : "FAILED") << std::endl;
 }
 
 // Test case for NeuralNetwork clone functionality.
@@ -30,12 +36,12 @@ void TestNeuralNetworkClone() {
   bool passed = true;
 
   // Create an original instance of the mock neural network.
-  std::unique_ptr<alphazero::NeuralNetwork> original =
-      std::make_unique<alphazero::NeuralNetwork>();
+  std::unique_ptr<NeuralNetwork> original =
+      std::make_unique<NeuralNetwork>();
 
   // Clone the network.
-  std::shared_ptr<alphazero::NeuralNetwork> cloned =
-      std::dynamic_pointer_cast<alphazero::NeuralNetwork>(original->clone());
+  std::shared_ptr<NeuralNetwork> cloned =
+      std::dynamic_pointer_cast<NeuralNetwork>(original->clone());
 
   // Ensure that the cloned pointer is different from the original.
   if (original.get() == cloned.get()) {
@@ -45,7 +51,7 @@ void TestNeuralNetworkClone() {
 
 
   torch::Tensor input = torch::rand({1, 1, 3, 3});
-  auto game = std::make_unique<alphazero::TicTacToe>();
+  auto game = std::make_unique<TicTacToe>();
 
   // Compute the forward pass from both the original and the cloned network.
   auto [policy_original, value_original] = original->forward(input);
@@ -69,7 +75,7 @@ void TestCanonicalBoard() {
   std::cout << "\nRunning Canonical Board Test...\n";
   bool passed = true;
 
-  auto game = std::make_unique<alphazero::TicTacToe>();
+  auto game = std::make_unique<TicTacToe>();
   auto canonical_board = game->GetCanonicalBoard();
   std::cout << "Canonical Board: \n" << canonical_board << "\n";
 
@@ -77,7 +83,7 @@ void TestCanonicalBoard() {
   canonical_board = game->GetCanonicalBoard();
   std::cout << "Canonical Board after move: \n" << canonical_board << "\n";
 
-game->MakeMove(5);
+  game->MakeMove(5);
   canonical_board = game->GetCanonicalBoard();
   std::cout << "Canonical Board after move: \n" << canonical_board << "\n";
 }
@@ -87,10 +93,10 @@ void TestForwardPassDifferentPlayers() {
   bool passed = true;
 
   // Create an original instance of the mock neural network.
-  std::unique_ptr<alphazero::NeuralNetwork> network =
-      std::make_unique<alphazero::NeuralNetwork>();
+  std::unique_ptr<NeuralNetwork> network =
+      std::make_unique<NeuralNetwork>();
 
-  auto game = std::make_unique<alphazero::TicTacToe>();
+  auto game = std::make_unique<TicTacToe>();
   game->MakeMove(4);
   auto input = game->GetCanonicalBoard().unsqueeze(0);
   std::cout << "Input: \n" << input << "\n";
@@ -111,9 +117,9 @@ void TestComputePolicyLoss() {
   bool passed = true;
   
   // Create a Trainer instance.
-  auto network = std::make_shared<alphazero::NeuralNetwork>();
-  alphazero::Config config = TestConfig();
-  alphazero::Trainer trainer(network, config);
+  auto network = std::make_shared<NeuralNetwork>();
+  Config config = TestConfig();
+  Trainer trainer(network, config);
   
   // --- Test 1 ---
   // When the predicted policy equals the target policy, the loss should be zero.
@@ -144,9 +150,9 @@ void TestComputePolicyLoss() {
 // Test case for computing value loss.
 void TestComputeValueLoss() {
   bool passed = true;
-  auto network = std::make_shared<alphazero::NeuralNetwork>();
-  alphazero::Config config = TestConfig();
-  alphazero::Trainer trainer(network, config);
+  auto network = std::make_shared<NeuralNetwork>();
+  Config config = TestConfig();
+  Trainer trainer(network, config);
   
   // --- Test 1 ---
   // When prediction and target are identical the loss should be zero.
@@ -180,7 +186,7 @@ void CheckNetworkUpdates() {
   
   // Create a simple NeuralNetwork instance.
   // Here, we use arbitrary parameters (input channels=1, filters=16, num_actions=9, residual blocks=1)
-  auto network = std::make_shared<alphazero::NeuralNetwork>(1, 16, 9, 1);
+  auto network = std::make_shared<NeuralNetwork>(1, 16, 9, 1);
   
   // Create an Adam optimizer for the network.
   torch::optim::Adam optimizer(network->parameters(),
@@ -197,8 +203,8 @@ void CheckNetworkUpdates() {
   auto value_target = torch::tensor({1.0f}, torch::kFloat);
   
   // Create a Trainer instance.
-  alphazero::Config config = TestConfig();
-  alphazero::Trainer trainer(network, config);
+  Config config = TestConfig();
+  Trainer trainer(network, config);
   
   // Compute network predictions.
   auto output = network->forward(state);
@@ -240,125 +246,76 @@ void CheckNetworkUpdates() {
 void TestExecuteEpisodeSelfPlay() {
   std::cout << "Running TestExecuteEpisodeSelfPlay..." << std::endl;
 
-  // Create a configuration instance.
-  alphazero::Config config = TestConfig();
-  // (Optional: tweak config fields if needed, for example:
-  //  config.temperature = 1.0f; )
+  Config config = TestConfig();
+  auto network = std::make_shared<NeuralNetwork>(1, 16, 9, 1);
+  SelfPlay<TicTacToe> self_play(network, config);
 
-  // Create a dummy neural network instance.
-  // Adjust the constructor parameters if needed.
-  auto network = std::make_shared<alphazero::NeuralNetwork>(1, 16, 9, 1);
-
-  // Create a SelfPlay instance with the network and configuration.
-  alphazero::SelfPlay self_play(network, config);
-
-  // Run the self-play episode.
-  std::vector<alphazero::GameExample> examples = self_play.ExecuteEpisode();
-
+  GameEpisode episode = self_play.ExecuteEpisode();
   bool passed = true;
 
-  // Check that we collected some examples.
-  if (examples.empty()) {
-    std::cout << "Test failed: No examples were generated during the episode." << std::endl;
+  if (episode.boards.empty()) {
+    std::cout << "Test failed: No moves were generated during the episode." << std::endl;
     passed = false;
   }
 
   // For TicTacToe, an episode should not exceed 9 moves.
-  if (examples.size() > 9) {
-    std::cout << "Test failed: Episode generated " << examples.size()
+  if (episode.boards.size() > 9) {
+    std::cout << "Test failed: Episode generated " << episode.boards.size()
               << " moves which exceeds the maximum of 9 moves." << std::endl;
     passed = false;
   }
 
-  // Validate each training example.
-  for (size_t i = 0; i < examples.size(); ++i) {
-    const auto &ex = examples[i];
-
-    // Check that the board tensor is defined.
-    if (!ex.board.defined()) {
-      std::cout << "Test failed: Example " << i << " has an undefined board tensor." << std::endl;
+  // Validate each move in the episode.
+  for (size_t i = 0; i < episode.boards.size(); ++i) {
+    const auto &board = episode.boards[i];
+    if (!board.defined()) {
+      std::cout << "Test failed: Move " << i << " has an undefined board tensor." << std::endl;
       passed = false;
       break;
     }
-
-    // For a 3x3 board with one channel, we expect 9 elements.
-    if (ex.board.numel() != 9) {
-      std::cout << "Test failed: Example " << i << " board tensor does not contain 9 elements (has "
-                << ex.board.numel() << " elements)." << std::endl;
+    if (board.numel() != 9) {
+      std::cout << "Test failed: Move " << i << " board tensor does not contain 9 elements (has "
+                << board.numel() << " elements)." << std::endl;
       passed = false;
       break;
     }
-
-    // Check that the policy vector exactly covers all 9 possible moves.
-    if (ex.policy.size() != 9) {
-      std::cout << "Test failed: Example " << i << " policy vector has " << ex.policy.size()
+    if (episode.policies[i].size() != 9) {
+      std::cout << "Test failed: Move " << i << " policy vector has " << episode.policies[i].size()
                 << " elements instead of 9." << std::endl;
       passed = false;
       break;
     }
-
-    // Check that the value is within the valid range [-1, 1].
-    if (ex.value < -1.0f || ex.value > 1.0f) {
-      std::cout << "Test failed: Example " << i << " has a value out of range: " << ex.value << std::endl;
+    if (episode.values[i] < -1.0f || episode.values[i] > 1.0f) {
+      std::cout << "Test failed: Move " << i << " has a value out of range: " << episode.values[i] << std::endl;
       passed = false;
       break;
     }
   }
 
-  // (Optional) Check that the value alternates if game result is nonzero.
-  if (!examples.empty() && std::abs(examples[0].value) > 1e-6) {
-    for (size_t i = 1; i < examples.size(); ++i) {
-      // Since the code flips final_value after each move, consecutive examples should be negatives.
-      if (std::abs(examples[i].value + examples[i - 1].value) > 1e-6) {
-        std::cout << "Test failed: Example " << i
-                  << " value (" << examples[i].value
-                  << ") is not the negative of previous value ("
-                  << examples[i - 1].value << ")." << std::endl;
-        passed = false;
-        break;
-      }
-    }
-  }
-
-  // Final result.
-  std::cout << "SelfPlay::ExecuteEpisode generated " << examples.size() << " examples." << std::endl;
+  std::cout << "SelfPlay::ExecuteEpisode generated " << episode.boards.size() << " moves." << std::endl;
   PrintTestResult("ExecuteEpisode SelfPlay Test", passed);
 }
 
 void PrintSelfPlayEpisode() {
-  std::cout << "Printing a self-play episode:" << std::endl;
+  std::cout << "Printing a self–play episode:" << std::endl;
 
-  // Create a configuration instance.
-  alphazero::Config config = TestConfig();
-  // Optionally adjust any configuration parameters
-  // e.g., config.temperature = 1.0f;
+  Config config = TestConfig();
+  auto network = std::make_shared<NeuralNetwork>(1, 16, 9, 1);
+  SelfPlay<TicTacToe> self_play(network, config);
 
-  // Create a dummy neural network instance.
-  // Adjust constructor parameters as needed (e.g., 1 input channel, 16 filters, 9 actions, 1 residual block).
-  auto network =
-      std::make_shared<alphazero::NeuralNetwork>(1, 16, 9, 1);
+  GameEpisode episode = self_play.ExecuteEpisode();
 
-  // Create a SelfPlay instance with the network and configuration.
-  alphazero::SelfPlay self_play(network, config);
+  std::cout << "Generated " << episode.boards.size() << " moves in the episode." << std::endl;
 
-  // Execute one self-play episode.
-  std::vector<alphazero::GameExample> examples =
-      self_play.ExecuteEpisode();
-
-  std::cout << "Generated " << examples.size()
-            << " examples in the episode." << std::endl;
-
-  // Print details for each example.
-  for (size_t i = 0; i < examples.size(); ++i) {
-    const auto &ex = examples[i];
-    std::cout << "Example " << i << ":" << std::endl;
-    std::cout << "Board: " << ex.board << std::endl;
+  for (size_t i = 0; i < episode.boards.size(); ++i) {
+    std::cout << "Move " << i << ":" << std::endl;
+    std::cout << "Board: " << episode.boards[i] << std::endl;
     std::cout << "Policy: [ ";
-    for (const auto &prob : ex.policy) {
+    for (const auto &prob : episode.policies[i]) {
       std::cout << prob << " ";
     }
     std::cout << "]" << std::endl;
-    std::cout << "Value: " << ex.value << std::endl;
+    std::cout << "Value: " << episode.values[i] << std::endl;
     std::cout << "--------------------------" << std::endl;
   }
 }
@@ -366,16 +323,16 @@ void PrintSelfPlayEpisode() {
 // TestMCTSExplorationStats verifies that MCTS properly records its exploration statistics.
 void TestMCTSExplorationStats() {
   // Create a dummy configuration.
-  alphazero::Config config = TestConfig();
+  Config config = TestConfig();
   // (Initialize config fields if necessary.)
 
   // Create a neural network instance.
   // Constructor: NeuralNetwork(int64_t input_channels, int64_t num_filters, 
   //                             int64_t num_actions, int64_t num_residual_blocks);
-  auto network = std::make_shared<alphazero::NeuralNetwork>(1, 32, 9, 3);
+  auto network = std::make_shared<NeuralNetwork>(1, 32, 9, 3);
 
   // Instantiate MCTS with the network and configuration.
-  alphazero::MCTS mcts(network, config);
+  MCTS mcts(network, config);
 
   // Retrieve the root node for the search tree.
   // It is assumed that GetRoot() returns a pointer to the current root Node.
@@ -383,13 +340,13 @@ void TestMCTSExplorationStats() {
   assert(root != nullptr && "MCTS did not create a valid root node.");
 
   // Create a TicTacToe game instance.
-  alphazero::TicTacToe game;
+  auto game = std::make_unique<TicTacToe>();
 
   // Run MCTS search for a fixed number of iterations.
   // Your MCTS search function's signature is: void Search(Game& state, Node* node);
   const int kSimulations = 100;
   for (int i = 0; i < kSimulations; ++i) {
-    mcts.Search(game, root);
+    mcts.Search(game.get(), root);
   }
 
   // Retrieve exploration statistics using GetStats().
@@ -399,34 +356,34 @@ void TestMCTSExplorationStats() {
 
 void TestSaveTestNetwork() {
     std::cout << "Running SaveTestNetwork..." << std::endl;
-    alphazero::Config test_config;
+    Config test_config;
     test_config.model_path = "test_model";
-    alphazero::NetworkManager network_manager(test_config);
+    NetworkManager network_manager(test_config);
     network_manager.SetBestNetwork(network_manager.CreateInitialNetwork());
     network_manager.SaveBestNetwork();
 }
 
 void TestNetworkManager() {
     std::cout << "Running TestNetworkManager..." << std::endl;
-    alphazero::Config test_config;
+    Config test_config;
     test_config.model_path = "test_model";
-    alphazero::NetworkManager network_manager(test_config);
+    NetworkManager network_manager(test_config);
     network_manager.SetBestNetwork(network_manager.CreateInitialNetwork());
     network_manager.LoadBestNetwork();
-    alphazero::EvaluationStats eval_stats{0.5f, 0.0f, 0.0f};
+    EvaluationStats eval_stats{0.5f, 0.0f, 0.0f};
     network_manager.AcceptOrRejectNewNetwork(network_manager.GetBestNetwork(), eval_stats);
 }
 
 void TestMergeAndClearStats() {
   // Create an aggregator MCTSStats object (initially all values are zero).
-  alphazero::MCTSStats aggregate_stats;
+  MCTSStats aggregate_stats;
 
   // Create a dummy move_stats object and set test values.
-  alphazero::MCTSStats move_stats;
+  MCTSStats move_stats;
   move_stats.RecordNodeStats(1, 1, 1.0f, 1.0f, 1.0f, true);
   
   // Log the dummy move stats.
-  alphazero::Logger::GetInstance().LogFormat(
+  Logger::GetInstance().LogFormat(
       "Before merging: move_stats -> Simulations: {}, Expanded Nodes: {}",
       move_stats.GetNumSimulations(), move_stats.GetNumExpandedNodes());
 
@@ -438,87 +395,95 @@ void TestMergeAndClearStats() {
 }
 
 void TestMCTSHasStats() {
-    alphazero::Config config = TestConfig();
-    auto network = std::make_shared<alphazero::NeuralNetwork>(1, 16, 9, 1);
-    alphazero::MCTS mcts(network, config);
-    alphazero::TicTacToe game;
-    mcts.Search(game, mcts.GetRoot());
+    Config config = TestConfig();
+    auto network = std::make_shared<NeuralNetwork>(1, 16, 9, 1);
+    MCTS mcts(network, config);
+    auto game = std::make_unique<TicTacToe>();
+    mcts.Search(game.get(), mcts.GetRoot());
     auto stats = mcts.GetStats();
     stats.LogStatistics();
 }
 
 void TestSelfPlayStats() {
-    alphazero::Config config = TestConfig();
-    auto network = std::make_shared<alphazero::NeuralNetwork>(1, 16, 9, 1);
-    alphazero::SelfPlay self_play(network, config);
+    Config config = TestConfig();
+    auto network = std::make_shared<NeuralNetwork>(1, 16, 9, 1);
+    SelfPlay<TicTacToe> self_play(network, config);
     auto stats = self_play.GetStats();
     stats.LogStatistics();
 }
 
 void TestParallelFor() {
-  alphazero::Config config = TestConfig();
-  auto network = std::make_shared<alphazero::NeuralNetwork>(1, 16, 9, 1);
-  std::vector<alphazero::GameExample> examples;
+  Config config = TestConfig();
+  auto network = std::make_shared<NeuralNetwork>(1, 16, 9, 1);
+  // Accumulate full game episodes rather than partial examples.
+  std::vector<GameEpisode> episodes;
 
   // Aggregated statistics from all episodes.
-  alphazero::MCTSStats aggregated_stats;
+  MCTSStats aggregated_stats;
 
-  alphazero::ParallelFor(config.episodes_per_iteration, [&](int episode) {
+  // Run self-play episodes in parallel.
+  ParallelFor(config.episodes_per_iteration, [&](int episode_idx) {
     // Get a thread-local SelfPlay instance using the factory function.
-    auto &local_self_play = alphazero::GetThreadLocalInstance<alphazero::SelfPlay>([&]() {
-      return new alphazero::SelfPlay(network, config);
+    auto &local_self_play = GetThreadLocalInstance<SelfPlay<TicTacToe>>([&]() {
+      return new SelfPlay<TicTacToe>(network, config);
     });
 
     // Execute a self-play episode.
-    auto episode_examples = local_self_play.ExecuteEpisode();
+    GameEpisode episode = local_self_play.ExecuteEpisode();
 
-    // In the critical section, merge the thread's stats into the aggregator.
-    #ifdef _OPENMP
-    #pragma omp critical
-    #endif
+    // Enter critical section to safely update shared data.
+#ifdef _OPENMP
+#pragma omp critical
+#endif
     {
-      examples.insert(examples.end(),
-                      episode_examples.begin(),
-                      episode_examples.end());
-      // Get a local copy of the current stats from the self-play instance.
-      alphazero::MCTSStats local_stats = local_self_play.GetStats();
-      // Merge the local stats into the aggregated stats.
-      aggregated_stats.MergeStats(local_stats);
-      // Clear the local stats so that subsequent episodes start fresh.
+      // Append the full game episode to the episodes vector.
+      episodes.push_back(std::move(episode));
+      // Merge the thread-local stats into the aggregated stats.
+      aggregated_stats.MergeStats(local_self_play.GetStats());
+      // Clear the thread-local stats for the next episode.
       local_self_play.ClearStats();
     }
   });
 
-  std::cout << "Episodes: " << examples.size() 
-            << " Episodes per iteration: " 
-            << config.episodes_per_iteration << std::endl;
+  std::cout << "Episodes: " << episodes.size()
+            << ", Episodes per iteration: " << config.episodes_per_iteration
+            << std::endl;
   aggregated_stats.LogStatistics();
   std::cout << "TestParallelFor passed!" << std::endl;
 }
 
+void TestAllEpisodes() {
+  auto episodes = AllEpisodes();
+  std::cout << "All episodes: " << episodes.size() << std::endl;
+}
+}
+
+
 int main() {
-    try {
-        std::cout << "Starting MCTS Tests\n";
-        std::cout << "===================\n";
-        TestNeuralNetworkClone();
-        TestCanonicalBoard();
-        TestForwardPassDifferentPlayers();
-        TestComputePolicyLoss();
-        TestComputeValueLoss();
-        CheckNetworkUpdates();
-        TestExecuteEpisodeSelfPlay();
-        PrintSelfPlayEpisode();
-        TestMCTSExplorationStats();
-        TestSaveTestNetwork();
-        TestNetworkManager();
-        TestMergeAndClearStats();
-        TestSelfPlayStats();
-        TestMCTSHasStats();
-        TestParallelFor();
-        std::cout << "\nAll tests completed\n";
-        return 0;
-    } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << "\n";
-        return 1;
-    }
+  using namespace alphazero;
+  try {
+    std::cout << "Starting MCTS Tests\n";
+    std::cout << "===================\n";
+    TestNeuralNetworkClone();
+    TestCanonicalBoard();
+    TestForwardPassDifferentPlayers();
+    TestComputePolicyLoss();
+    TestComputeValueLoss();
+    CheckNetworkUpdates();
+    TestExecuteEpisodeSelfPlay();
+    PrintSelfPlayEpisode();
+    TestMCTSExplorationStats();
+    TestSaveTestNetwork();
+    TestNetworkManager();
+    TestMergeAndClearStats();
+    TestSelfPlayStats();
+    TestMCTSHasStats();
+    TestParallelFor();
+    TestAllEpisodes();
+    std::cout << "\nAll tests completed\n";
+    return 0;
+  } catch (const std::exception& e) {
+    std::cerr << "Error: " << e.what() << "\n";
+    return 1;
+  }
 }

@@ -1,11 +1,13 @@
 #ifndef ALPHAZERO_EVALUATOR_H
 #define ALPHAZERO_EVALUATOR_H
 
+#include <memory>
+#include <format>
+
 #include "game.h"
 #include "mcts.h"
 #include "config.h"
-#include <memory>
-#include <format>
+
 
 namespace alphazero {
 

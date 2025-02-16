@@ -27,10 +27,10 @@ EvaluationStats Evaluator::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork>
             bool is_network_turn = ((game->GetCurrentPlayer() == 1) == network_plays_first);
             
             if (is_network_turn) {
-                int action = mcts_main.SelectMove(*game, 0.0f);
+                int action = mcts_main.SelectMove(game.get(), 0.0f);
                 game->MakeMove(action);
             } else {
-                int action = mcts_opponent.SelectMove(*game, 0.0f);
+                int action = mcts_opponent.SelectMove(game.get(), 0.0f);
                 game->MakeMove(action);
             }
         }
@@ -72,7 +72,7 @@ EvaluationStats Evaluator::EvaluateAgainstRandom() {
             bool is_network_turn = ((game->GetCurrentPlayer() == 1) == network_plays_first);
             
             if (is_network_turn) {
-                int action = mcts.SelectMove(*game, 0.0f);
+                int action = mcts.SelectMove(game.get(), 0.0f);
                 // Optionally, you can validate the action here.
                 game->MakeMove(action);
             } else {
@@ -120,10 +120,10 @@ EvaluationStats Evaluator::EvaluateAgainstNetworkDetailed(
             bool is_network_turn = (game->GetCurrentPlayer() == 1) == network_plays_first;
             
             if (is_network_turn) {
-                int action = mcts_main.SelectMove(*game, 0.0f);
+                int action = mcts_main.SelectMove(game.get(), 0.0f);
                 game->MakeMove(action);
             } else {
-                int action = mcts_opponent.SelectMove(*game, 0.0f);
+                int action = mcts_opponent.SelectMove(game.get(), 0.0f);
                 game->MakeMove(action);
             }
         }

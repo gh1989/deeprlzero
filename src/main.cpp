@@ -6,6 +6,8 @@
 #include "core/config.h"
 #include "core/logger.h"
 #include "core/thread.h"
+#include "core/mcts_stats.h"
+#include "core/tictactoe.h"
 #include <iostream>
 #include <fstream>
 #include <omp.h>
@@ -39,11 +41,11 @@ int main(int argc, char** argv) {
     network->eval();
 
     // Initialize self-play and trainer
-    alphazero::SelfPlay self_play(network, config);
+    alphazero::SelfPlay<alphazero::TicTacToe> self_play(network, config);
     alphazero::Trainer trainer(network, config);
 
-  // Aggregated statistics from all episodes.
-  alphazero::MCTSStats aggregated_stats;
+    // Aggregated MCTS statistics.
+    alphazero::MCTSStats aggregated_stats;
 
     for (int iter = 0; iter < config.num_iterations; ++iter) {
         if (auto log_result = logger.LogFormat("Starting iteration {}/{}", iter + 1, config.num_iterations); !log_result) {
@@ -53,53 +55,25 @@ int main(int argc, char** argv) {
         // Set OpenMP parameters
         omp_set_num_threads(config.num_threads);
         
-        // Generate self-play games in parallel
-        std::vector<alphazero::GameExample> examples;
-        if (auto result = logger.LogFormat("Generating {} self-play games using {} threads...", 
-            config.episodes_per_iteration, config.num_threads); !result) {
-            std::cerr << "Failed to log game generation start" << std::endl;
+        // Generate self-play episodes
+        std::vector<alphazero::GameEpisode> episodes;
+        for (int i = 0; i < config.episodes_per_iteration; ++i) {
+            alphazero::GameEpisode episode = self_play.ExecuteEpisode();
+            episodes.push_back(episode);
         }
-        
 
-
-  alphazero::ParallelFor(config.episodes_per_iteration, [&](int episode) {
-    // Get a thread-local SelfPlay instance using the factory function.
-    auto &local_self_play = alphazero::GetThreadLocalInstance<alphazero::SelfPlay>([&]() {
-      return new alphazero::SelfPlay(network, config);
-    });
-
-    // Execute a self-play episode.
-    auto episode_examples = local_self_play.ExecuteEpisode();
-
-    // In the critical section, merge the thread's stats into the aggregator.
-    #ifdef _OPENMP
-    #pragma omp critical
-    #endif
-    {
-      examples.insert(examples.end(),
-                      episode_examples.begin(),
-                      episode_examples.end());
-      // Get a local copy of the current stats from the self-play instance.
-      alphazero::MCTSStats local_stats = local_self_play.GetStats();
-      // Merge the local stats into the aggregated stats.
-      aggregated_stats.MergeStats(local_stats);
-      // Clear the local stats so that subsequent episodes start fresh.
-      local_self_play.ClearStats();
-    }
-  });
-
-        if (auto result = logger.Log("Completed self-play games generation."); !result) {
+        if (auto result = logger.Log("Completed self-play episodes generation."); !result) {
             std::cerr << "Failed to log completion" << std::endl;
         }
         
-        // After self-play games are complete, log the MCTS statistics
+        // After self-play episodes are complete, log the MCTS statistics
         if (auto log_result = logger.LogFormat("\nMCTS Statistics for Iteration {}:", iter + 1); !log_result) {
             std::cerr << "Failed to log MCTS stats header" << std::endl;
         }
         self_play.ClearStats();
         
         // Training phase (on GPU)
-        trainer.Train(network, examples);
+        trainer.Train(network, episodes);
         
         // Evaluation phase (on CPU)
         network->to(torch::kCPU);

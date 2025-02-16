@@ -25,7 +25,7 @@ class Trainer {
   torch::Tensor ComputeValueLoss(const torch::Tensor& value_preds,
                                 const torch::Tensor& value_targets);
   void Train(std::shared_ptr<NeuralNetwork> network,
-            const std::vector<GameExample>& examples);
+            const std::vector<GameEpisode>& examples);
   
  private:
   const Config& config_;
