@@ -14,6 +14,7 @@ namespace alphazero {
 struct Node {
     float value_sum = 0.0f;
     int visit_count = 0;
+    bool expanded = false;
     float prior = 0.0f;
     std::vector<std::unique_ptr<Node>> children;
     Node* parent = nullptr;
@@ -31,10 +32,12 @@ struct Node {
     }
     
     bool IsExpanded() const {
-        for (const auto& child : children) {
-            if (child) return true;
-        }
-        return false;
+        return expanded;
+    }
+
+    bool SetExpanded(bool expanded_=true) {
+        expanded = expanded_;
+        return expanded;
     }
 };
 

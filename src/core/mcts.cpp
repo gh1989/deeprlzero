@@ -66,7 +66,6 @@ void MCTS::Search(const Game* state, Node* node) {
     
     if (!node->IsExpanded()) {
         ExpandNode(node, mutable_state.get());
-        return;
     }
     
     auto [action, child] = SelectAction(node, mutable_state.get());
@@ -184,6 +183,32 @@ int MCTS::SelectMove(const Game* state, float temperature) {
     }
 }
 
+void MCTS::ExpandNode(Node* node, const Game* state) {
+    // Get all valid moves from the current game state.
+    std::vector<int> valid_moves = state->GetValidMoves();
+    
+    // Ensure the children vector is resized to the action space size.
+    if (node->children.empty()) {
+        node->children.resize(state->GetActionSize());
+    }
+    
+    // Get the policy 
+    auto [policy, _] = GetPolicyValue(state);
+    
+    // Create new child nodes for each valid move.
+    for (int move : valid_moves) {
+        auto child = std::make_unique<Node>(config_);
+        child->prior = policy[move];
+        child->parent = node;
+        child->action = move;
+        child->depth = node->depth + 1;
+        node->children[move] = std::move(child);
+    }
+
+    // Mark node as expanded after creating all children
+    node->SetExpanded();
+}
+
 float MCTS::FullSearch(const Game* state, Node *node) {
   // If we're at a terminal state, return the actual game result.
   if (state->IsTerminal()) {
@@ -225,29 +250,6 @@ float MCTS::FullSearch(const Game* state, Node *node) {
   node->value_sum += best_value;
 
   return best_value;
-}
-
-void MCTS::ExpandNode(Node* node, const Game* state) {
-    // Get all valid moves from the current game state.
-    std::vector<int> valid_moves = state->GetValidMoves();
-    
-    // Ensure the children vector is resized to the action space size.
-    if (node->children.empty()) {
-        node->children.resize(state->GetActionSize());
-    }
-    
-    // Get the policy 
-    auto [policy, _] = GetPolicyValue(state);
-    
-    // Create new child nodes for each valid move.
-    for (int move : valid_moves) {
-        auto child = std::make_unique<Node>(config_);
-        child->prior = policy[move];
-        child->parent = node;
-        child->action = move;
-        child->depth = node->depth + 1;
-        node->children[move] = std::move(child);
-    }
 }
 
 }  // namespace alphazero 

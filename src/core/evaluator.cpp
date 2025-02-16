@@ -27,9 +27,17 @@ EvaluationStats Evaluator::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork>
             bool is_network_turn = ((game->GetCurrentPlayer() == 1) == network_plays_first);
             
             if (is_network_turn) {
+                mcts_main.ResetRoot();
+                for (int sim = 0; sim < config_.num_simulations; ++sim) {
+                    mcts_main.Search(game.get(), mcts_main.GetRoot());
+                }
                 int action = mcts_main.SelectMove(game.get(), 0.0f);
                 game->MakeMove(action);
             } else {
+                mcts_opponent.ResetRoot();
+                for (int sim = 0; sim < config_.num_simulations; ++sim) {
+                    mcts_opponent.Search(game.get(), mcts_opponent.GetRoot());
+                }
                 int action = mcts_opponent.SelectMove(game.get(), 0.0f);
                 game->MakeMove(action);
             }

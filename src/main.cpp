@@ -56,27 +56,45 @@ int main(int argc, char** argv) {
         omp_set_num_threads(config.num_threads);
         
         // Generate self-play episodes
+        // std::vector<alphazero::GameEpisode> episodes;
+        // for (int i = 0; i < config.episodes_per_iteration; ++i) {
+        //     alphazero::GameEpisode episode = self_play.ExecuteEpisode();
+        //     episodes.push_back(episode);
+        // }
+
+        // Accumulate full game episodes rather than partial examples.
         std::vector<alphazero::GameEpisode> episodes;
-        for (int i = 0; i < config.episodes_per_iteration; ++i) {
-            alphazero::GameEpisode episode = self_play.ExecuteEpisode();
-            episodes.push_back(episode);
-        }
+
+        // Run self-play episodes in parallel.
+        alphazero::ParallelFor(config.episodes_per_iteration, [&](int episode_idx) {
+            // Get a thread-local SelfPlay instance using the factory function.
+            auto &local_self_play = alphazero::GetThreadLocalInstance<alphazero::SelfPlay<alphazero::TicTacToe>>(
+                [&]() {
+            return new alphazero::SelfPlay<alphazero::TicTacToe>(network, config);
+            });
+
+            // Execute a self-play episode.
+            alphazero::GameEpisode episode = local_self_play.ExecuteEpisode();
+
+            // Enter critical section to safely update shared data.
+            #ifdef _OPENMP
+            #pragma omp critical
+            #endif
+                {
+                // Append the full game episode to the episodes vector.
+                episodes.push_back(std::move(episode));
+                }
+            });
 
         if (auto result = logger.Log("Completed self-play episodes generation."); !result) {
             std::cerr << "Failed to log completion" << std::endl;
         }
         
-        // After self-play episodes are complete, log the MCTS statistics
-        if (auto log_result = logger.LogFormat("\nMCTS Statistics for Iteration {}:", iter + 1); !log_result) {
-            std::cerr << "Failed to log MCTS stats header" << std::endl;
-        }
-        self_play.ClearStats();
-        
         // Training phase (on GPU)
         trainer.Train(network, episodes);
         
         // Evaluation phase (on CPU)
-        network->to(torch::kCPU);
+        //network->to(torch::kCPU);
         network->eval();
         alphazero::Evaluator evaluator(network, config);
         alphazero::EvaluationStats win_rate = evaluator.EvaluateAgainstNetwork(network_manager.GetBestNetwork());

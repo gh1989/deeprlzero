@@ -12,21 +12,22 @@ endif()
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-# If building a Release version, append debugging symbols to the flags.
-if (CMAKE_BUILD_TYPE STREQUAL "Release")
-  message(STATUS "Release build detected; appending debug symbols (-g) to compiler flags.")
-  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -g")
-  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -g")
-endif()
-
-# Set the C++ standard and compiler flags
+# Set the C++ standard and base compiler flags
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -g")
 
-# CUDA settings
-set(CMAKE_CUDA_ARCHITECTURES 75)
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -g -G")
+# Set build-type specific flags
+set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -Wall -Wextra -Wpedantic")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -DNDEBUG")
+set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG")
+
+# CUDA flags based on build type
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -g -O0")
+else()
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3")
+endif()
 
 # Set CUDA paths explicitly
 set(CUDA_TOOLKIT_ROOT_DIR "/usr/local/cuda-12.6")
