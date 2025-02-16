@@ -4,37 +4,16 @@
 
 namespace alphazero {
 
-torch::Tensor Trainer::ComputePolicyLoss(const torch::Tensor& policy_preds,
-                                const torch::Tensor& policy_targets) {
-  // Add a small constant to avoid log(0)
-  constexpr float kEpsilon = 1e-8f;
-  // Compute log(probabilities)
-  auto log_policy = (policy_preds + kEpsilon).log();
-
-  // Cross entropy loss: L_policy = -sum( pi * log(p) )
-  // We sum over the action dimension and then take the mean over the batch.
-  auto cross_entropy_loss = -torch::mean(torch::sum(policy_targets * log_policy, /*dim=*/1));
-
-  // Entropy of the predictions: H(p) = -sum( p * log(p) )
-  // Taking the mean over the batch.
-  auto entropy = -torch::mean(torch::sum(policy_preds * log_policy, /*dim=*/1));
-
-  // Entropy coefficient can be tuned (usually a small value such as 0.01 or so)
-  constexpr float kEntropyCoef = 0.01f;
-
-  // Total policy loss = cross entropy loss minus the entropy bonus.
-  // (Subtracting entropy encourages the network to remain somewhat uncertain,
-  //   promoting exploration.)
-  auto loss = cross_entropy_loss - kEntropyCoef * entropy;
-
-  return loss;
+torch::Tensor Trainer::ComputePolicyLoss(const torch::Tensor& pred_policy, 
+                                       const torch::Tensor& target_policy) {
+    // Cross entropy loss for policy
+    return -torch::mean(torch::sum(target_policy * torch::log_softmax(pred_policy, 1), 1));
 }
 
-torch::Tensor Trainer::ComputeValueLoss(const torch::Tensor& value_preds,
-                               const torch::Tensor& value_targets) {
-  // Compute the Mean Squared Error loss between predicted and target values.
-  // This loss measures the average squared difference between the predictions and targets.
-  return torch::mse_loss(value_preds, value_targets);
+torch::Tensor Trainer::ComputeValueLoss(const torch::Tensor& pred_value, 
+                                      const torch::Tensor& target_value) {
+    // MSE loss for value
+    return torch::mean(torch::pow(pred_value - target_value, 2));
 }
 
 void Trainer::Train(std::shared_ptr<NeuralNetwork> network,

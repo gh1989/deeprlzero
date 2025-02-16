@@ -87,26 +87,14 @@ std::pair<int, Node*> MCTS::SelectAction(Node* node, const Game* state) {
     auto valid_moves = state->GetValidMoves();
     assert(!valid_moves.empty() && "Must have at least one valid move");
         
-    float sqrt_total = std::sqrt(static_cast<float>(node->visit_count + 1));  // Add 1 to prevent division by zero
+    float parent_visit_sqrt = std::sqrt(static_cast<float>(node->visit_count));
     
     for (int move : valid_moves) {
-        if (!node->children[move]) {
-            continue;
-        }
+        assert(node->children[move] && "Expanded node must have all valid children");
         
         Node* child = node->children[move].get();
         float q_value = child->visit_count > 0 ? child->GetValue() : 0.0f;
-        
-        // Add noise to root node for exploration
-        float prior = child->prior;
-        if (node == root_.get()) {
-            static thread_local std::mt19937 gen(std::random_device{}());
-            std::gamma_distribution<float> gamma(config_.gamma_alpha, config_.gamma_beta);
-            float noise = gamma(gen);
-            prior = config_.prior_alpha * prior + (1 - config_.prior_alpha) * noise;
-        }
-        
-        float u_value = config_.c_puct * prior * sqrt_total / (1 + child->visit_count);
+        float u_value = config_.c_puct * child->prior * parent_visit_sqrt / (1 + child->visit_count);
         float score = q_value + u_value;
         
         if (score > best_score) {
@@ -114,19 +102,6 @@ std::pair<int, Node*> MCTS::SelectAction(Node* node, const Game* state) {
             best_action = move;
             best_child = child;
         }
-    }
-    
-    // If no existing children were selected, create a new child for the first valid move
-    if (best_action == -1) {
-        // std::cout << "Creating new child for first valid move" << std::endl;
-        int move = valid_moves[0];
-        auto child = std::make_unique<Node>(config_);
-        child->parent = node;
-        child->action = move;
-        child->prior = 1.0f / valid_moves.size();
-        best_child = child.get();
-        node->children[move] = std::move(child);
-        best_action = move;
     }
     
     assert(best_action != -1 && "Must select a valid action");

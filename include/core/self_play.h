@@ -54,11 +54,20 @@ class SelfPlay {
           game->MakeMove(move);
       }
       
+      // Add final board state
+      episode.boards.push_back(game->GetCanonicalBoard());
+      // Add zero policy for terminal state - no moves should be made
+      std::vector<float> terminal_policy(config_.action_size, 0.0f);
+      episode.policies.push_back(terminal_policy);
+      episode.values.push_back(0.0f);
+      players.push_back(game->GetCurrentPlayer());
+      
       float final_result = game->GetGameResult();
       episode.outcome = final_result;
       
-      for (size_t i = 0; i < episode.values.size(); ++i) {
-          episode.values[i] = (players[i] == 1) ? final_result : -final_result;
+      // Backpropagate values from the end of the game
+      for (int i = episode.values.size() - 1; i >= 0; --i) {
+          episode.values[i] = (players[i] == 1) ? -final_result : final_result;
       }
       
       game->Reset();

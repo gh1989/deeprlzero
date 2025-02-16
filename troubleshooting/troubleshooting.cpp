@@ -10,6 +10,7 @@
 #include <vector>
 #include <numeric>
 #include <cassert>
+#include <iomanip>
 
 #include "core/trainer.h"
 #include "core/self_play.h"
@@ -456,8 +457,43 @@ void TestAllEpisodes() {
   auto episodes = AllEpisodes();
   std::cout << "All episodes: " << episodes.size() << std::endl;
 }
-}
 
+void TestEpisodesQuality() {
+  std::vector<GameEpisode> episodes;
+  auto network = std::make_shared<NeuralNetwork>(1, 16, 9, 1);
+  Config config = TestConfig();
+  auto self_play = std::make_unique<SelfPlay<TicTacToe>>(network, config);
+  for (int i = 0; i < 100; ++i) {
+    episodes.push_back(self_play->ExecuteEpisode());
+  }
+
+  std::cout << "Episodes: " << episodes.size() << std::endl;
+  
+  for (const auto& episode : episodes) {
+    std::cout << std::format("Episode: {} Policy: {} Values: {} Outcome: {}", episode.boards.size(), episode.policies.size(), episode.values.size(), episode.outcome) << std::endl;
+
+    // Print board rows across all moves in this episode
+    for (int row = 0; row < 3; row++) {
+        for (size_t move = 0; move < episode.boards.size(); move++) {
+            auto board_tensor = episode.boards[move];
+            // Access the tensor data correctly
+            auto accessor = board_tensor.accessor<float, 3>();
+            
+            // Print row for this move's board
+            for (int col = 0; col < 3; col++) {
+                float value = accessor[0][row][col];  // Using proper tensor indexing
+                if (value == 0) std::cout << ". ";
+                else if (value == 1) std::cout << "X ";
+                else std::cout << "O ";
+            }
+            std::cout << "   "; // Space between boards
+        }
+        std::cout << std::endl;
+    }
+    std::cout << std::endl; // Space between episodes
+  }
+}
+}
 
 int main() {
   using namespace alphazero;
@@ -479,7 +515,8 @@ int main() {
     TestSelfPlayStats();
     TestMCTSHasStats();
     TestParallelFor();
-    TestAllEpisodes();
+    //TestAllEpisodes();
+    TestEpisodesQuality();
     std::cout << "\nAll tests completed\n";
     return 0;
   } catch (const std::exception& e) {
