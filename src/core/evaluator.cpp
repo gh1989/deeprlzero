@@ -59,6 +59,7 @@ EvaluationStats Evaluator::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork>
             }
         }
         
+        /*
         std::cout << "\n=== EVALUATION NETWORKS COMPARISON ===" << std::endl;
         std::cout << "Main network: sum=" << main_param_sum 
                   << ", avg=" << (main_param_sum / main_param_count) << std::endl;
@@ -66,6 +67,7 @@ EvaluationStats Evaluator::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork>
                   << ", avg=" << (opp_param_sum / opp_param_count) << std::endl;
         std::cout << "Different?: " << (std::abs(main_param_sum - opp_param_sum) > 1e-6 ? "YES" : "NO") << std::endl;
         std::cout << "=====================================\n" << std::endl;
+        */
     }
 
     if (IsIdenticalNetwork(network_, opponent)) {
@@ -82,8 +84,8 @@ EvaluationStats Evaluator::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork>
         auto game = std::make_unique<TicTacToe>();
         bool network_plays_first = (i % 2 == 0);
         
-        std::cout << "\nGame " << i << ": Main network plays " 
-                  << (network_plays_first ? "first" : "second") << "\n";
+        //std::cout << "\nGame " << i << ": Main network plays " 
+        //          << (network_plays_first ? "first" : "second") << "\n";
         int move_count = 0;
         
         while (!game->IsTerminal()) {
@@ -95,7 +97,7 @@ EvaluationStats Evaluator::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork>
                     mcts_main.Search(game.get(), mcts_main.GetRoot());
                 }
                 int action = mcts_main.SelectMove(game.get(), 0.6f);
-                std::cout << "Main network move " << move_count << ": " << action << "\n";
+                //std::cout << "Main network move " << move_count << ": " << action << "\n";
                 game->MakeMove(action);
             } else {
                 mcts_opponent.ResetRoot();
@@ -103,7 +105,7 @@ EvaluationStats Evaluator::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork>
                     mcts_opponent.Search(game.get(), mcts_opponent.GetRoot());
                 }
                 int action = mcts_opponent.SelectMove(game.get(), 0.6f);
-                std::cout << "Opponent move " << move_count << ": " << action << "\n";
+                //std::cout << "Opponent move " << move_count << ": " << action << "\n";
                 game->MakeMove(action);
             }
             move_count++;
@@ -114,13 +116,13 @@ EvaluationStats Evaluator::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork>
         
         if (perspective_result > 0) {
             losses++;  // Opponent lost
-            std::cout << "Opponent LOST\n";
+            std::cout << "L";
         } else if (perspective_result == 0) {
             draws++;
-            std::cout << "DRAW\n";
+            std::cout << "D";
         } else {
             wins++;  // Opponent won
-            std::cout << "Opponent WON\n";
+            std::cout << "W";
         }
     }
     

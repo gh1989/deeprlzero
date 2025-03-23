@@ -534,8 +534,8 @@ void TestEpisodesQuality() {
         auto game = std::make_unique<TicTacToe>();
         bool network_plays_first = (i % 2 == 0);
         
-        std::cout << "\nGame " << i << ": Main network plays " 
-                  << (network_plays_first ? "first" : "second") << "\n";
+        //std::cout << "\nGame " << i << ": Main network plays " 
+        //          << (network_plays_first ? "first" : "second") << "\n";
         int move_count = 0;
         
         while (!game->IsTerminal()) {
@@ -547,7 +547,7 @@ void TestEpisodesQuality() {
                     mcts_main.Search(game.get(), mcts_main.GetRoot());
                 }
                 int action = mcts_main.SelectMove(game.get(), 0.0f);
-                std::cout << "Main network move " << move_count << ": " << action << "\n";
+                //std::cout << "Main network move " << move_count << ": " << action << "\n";
                 game->MakeMove(action);
             } else {
                 mcts_opponent.ResetRoot();
@@ -555,7 +555,7 @@ void TestEpisodesQuality() {
                     mcts_opponent.Search(game.get(), mcts_opponent.GetRoot());
                 }
                 int action = mcts_opponent.SelectMove(game.get(), 0.0f);
-                std::cout << "Opponent move " << move_count << ": " << action << "\n";
+                //std::cout << "Opponent move " << move_count << ": " << action << "\n";
                 game->MakeMove(action);
             }
             move_count++;
@@ -566,13 +566,13 @@ void TestEpisodesQuality() {
         
         if (perspective_result > 0) {
             wins++;
-            std::cout << "Main network WON\n";
+            std::cout << "W";
         } else if (perspective_result == 0) {
             draws++;
-            std::cout << "DRAW\n";
+            std::cout << "D";
         } else {
             losses++;
-            std::cout << "Main network LOST\n";
+            std::cout << "L";
         }
     }
     

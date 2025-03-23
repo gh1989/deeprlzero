@@ -27,16 +27,11 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-/*
     if(!network_manager.LoadBestNetwork()) {
         auto network = network_manager.CreateInitialNetwork();
         network_manager.SetBestNetwork(network);
     }
-*/
-
-    auto network = network_manager.CreateInitialNetwork();
-    network_manager.SetBestNetwork(network);
-
+    return 0;
     alphazero::MCTSStats aggregated_stats;
 
     for (int iter = 0; iter < config.num_iterations; ++iter) {
@@ -57,10 +52,13 @@ int main(int argc, char** argv) {
         }
 
         //Generate the episodes with the best network.
+        auto episodes = self_play.ExecuteEpisodesParallel();
+        /*
         auto episodes = std::vector<alphazero::GameEpisode>();
         for (int i = 0; i < config.episodes_per_iteration; ++i) {
             episodes.push_back(self_play.ExecuteEpisode());
         }
+        */
         
         if (auto result = logger.Log("Completed self-play episodes generation."); !result) {
             std::cerr << "Failed to log completion" << std::endl;
@@ -70,12 +68,21 @@ int main(int argc, char** argv) {
         //Now which network should be instantiated for the evaluator? and which one is the argument?
         alphazero::EvaluationStats evaluation_stats = evaluator.EvaluateAgainstNetwork(network_to_train);
         
-        if (auto result = logger.LogFormat("Iteration {} Summary:\n  Win Rate vs Best: {}\n  Temperature: {}", 
-            iter + 1, evaluation_stats.WinStats(), network_manager.GetCurrentTemperature()); !result) {
-            std::cerr << "Failed to log iteration summary" << std::endl;
-        }
-                
-        network_manager.AcceptOrRejectNewNetwork(network_to_train, evaluation_stats);
+        // Print acceptance criteria and stats for debugging
+        /*
+        std::cout << "\n=== NETWORK ACCEPTANCE CRITERIA ===" << std::endl;
+        std::cout << "Win rate: " << evaluation_stats.win_rate * 100 << "%" << std::endl;
+        std::cout << "Draw rate: " << evaluation_stats.draw_rate * 100 << "%" << std::endl;
+        std::cout << "Loss rate: " << evaluation_stats.loss_rate * 100 << "%" << std::endl;
+        std::cout << "New performance (win+draw): " << (evaluation_stats.win_rate + evaluation_stats.draw_rate) * 100 << "%" << std::endl;
+        std::cout << "Acceptance threshold: " << config.acceptance_threshold * 100 << "%" << std::endl;
+        std::cout << "Loss threshold: " << config.loss_threshold * 100 << "%" << std::endl;
+        std::cout << "=================================" << std::endl;
+        */
+
+        // Save the result of acceptance/rejection
+        bool network_accepted = network_manager.AcceptOrRejectNewNetwork(network_to_train, evaluation_stats);
+        std::cout << "Network acceptance decision: " << (network_accepted ? "ACCEPTED" : "REJECTED") << std::endl;
         network_manager.UpdateTemperature();
     }
     

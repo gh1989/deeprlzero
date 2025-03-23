@@ -36,12 +36,12 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
     
     // Standard device - explicitly use cuda:0 instead of just cuda
     torch::Device device(torch::kCUDA, 0);
-    std::cout << "Training on device: " << device << std::endl;
+    //std::cout << "Training on device: " << device << std::endl;
         
     network_->to(device);
     network_->train();
 
-    std::cout << "Learning rate: " << config_.learning_rate << std::endl;
+    //std::cout << "Learning rate: " << config_.learning_rate << std::endl;
     
     // Collect all data
     std::vector<torch::Tensor> all_boards;
@@ -61,10 +61,12 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
     auto policies = torch::tensor(all_policies).reshape({-1, config_.action_size}).to(device);
     auto values = torch::tensor(all_values).reshape({-1, 1}).to(device);
 
+    /*
     std::cout << "Training data shapes:" << std::endl;
     std::cout << "States: " << states.sizes() << std::endl;
     std::cout << "Policies: " << policies.sizes() << std::endl;
     std::cout << "Values: " << values.sizes() << std::endl;
+    */
     
     for (int epoch = 0; epoch < config_.num_epochs; ++epoch) {
         // Save parameters before update for comparison
@@ -92,13 +94,14 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
         
         // Print the device of the loss
         if (epoch == 0) {
-            std::cout << "Loss device: " << total_loss.device() << std::endl;
+            //std::cout << "Loss device: " << total_loss.device() << std::endl;
         }
         
         // Backward pass
         total_loss.backward();
         
         // Debug gradients after backward pass
+        /*
         if (epoch == 0 || epoch == config_.num_epochs - 1) {
             std::cout << "\nGradient information (epoch " << epoch << "):" << std::endl;
             for (const auto& param : network_->parameters()) {
@@ -110,6 +113,7 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
                 }
             }
         }
+        */
         
         // After backward pass, add this debug code:
         for (auto& param : network_->parameters()) {
@@ -131,11 +135,12 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
                 break;
             }
         }
-        
+        /*
         std::cout << "Epoch " << epoch + 1 << "/" << config_.num_epochs 
                   << " - Policy Loss: " << loss_policy.item<float>()
                   << " Value Loss: " << loss_value.item<float>()
                   << " Parameters updated: " << (params_updated ? "Yes" : "No") << std::endl;
+                  */
     }
 
     // Add this at the end of the Train method

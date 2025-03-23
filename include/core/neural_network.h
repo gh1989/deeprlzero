@@ -21,10 +21,17 @@ class NeuralNetwork : public torch::nn::Cloneable<NeuralNetwork>,
   explicit NeuralNetwork(const Config& config);
   
   std::pair<torch::Tensor, torch::Tensor> forward(torch::Tensor x);
-  
+  std::pair<torch::Tensor, torch::Tensor> forward_impl(torch::Tensor x);
+
   // Fix the clone method to match the base class return type
   std::shared_ptr<torch::nn::Module> clone(const torch::optional<torch::Device>& device = torch::nullopt) const override {
-    return torch::nn::Cloneable<NeuralNetwork>::clone(device);
+    auto cloned = torch::nn::Cloneable<NeuralNetwork>::clone(device);
+    auto typed_clone = std::dynamic_pointer_cast<NeuralNetwork>(cloned);
+    
+    // Set up a new mutex for the clone
+    typed_clone->forward_mutex_ = std::make_shared<std::mutex>();
+    
+    return cloned;
   }
   
   // Implement the required reset() method from Cloneable
@@ -35,6 +42,14 @@ class NeuralNetwork : public torch::nn::Cloneable<NeuralNetwork>,
   
   //void save(const std::string& path);
   //void load(const std::string& path);
+  
+  // Change from a direct mutex to a shared_ptr to a mutex
+  std::shared_ptr<std::mutex> forward_mutex_;
+  
+  NeuralNetwork() {
+    // Initialize the mutex
+    forward_mutex_ = std::make_shared<std::mutex>();
+  }
   
  private:
   torch::nn::Conv2d conv{nullptr};
@@ -53,7 +68,9 @@ class NeuralNetwork : public torch::nn::Cloneable<NeuralNetwork>,
 
   torch::Tensor cached_policy_;   
   torch::Tensor cached_value_;
-  //std::mutex forward_mutex_;
+  
+  // Implement the actual forward logic in a private method
+  std::tuple<torch::Tensor, torch::Tensor> forward_impl(torch::Tensor x) const;
 };
 
 }  // namespace alphazero

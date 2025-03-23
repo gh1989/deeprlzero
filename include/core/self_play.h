@@ -9,6 +9,8 @@
 #include <vector>
 #include <tuple>
 #include <random>
+#include <mutex>
+#include <atomic>
 
 namespace alphazero {
 
@@ -35,28 +37,76 @@ class SelfPlay {
     mcts_stats_ = MCTSStats();
 }
 
-  std::vector<GameEpisode> ExecuteEpisodesParallel() {       
+  std::vector<GameEpisode> ExecuteEpisodesParallel() {   
+    // Set OpenMP parameters for optimal performance
+    omp_set_dynamic(0);  // Disable dynamic adjustment of threads
+    omp_set_nested(0);   // Disable nested parallelism    
     omp_set_num_threads(config_.num_threads);
+    
+    // Pre-allocate the episodes vector to avoid thread contention
     std::vector<GameEpisode> episodes;
-    ParallelFor(config_.episodes_per_iteration, [&](int episode_idx) {
-      // Get a thread-local SelfPlay instance using the factory function.
-      auto &local_self_play = GetThreadLocalInstance<SelfPlay<GameType>>(
-          [&]() {
-        return new SelfPlay<GameType>(network_, config_, config_.initial_temperature);
+    episodes.reserve(config_.episodes_per_iteration);
+    
+    std::cout << "\nGenerating " << config_.episodes_per_iteration << " episodes using " 
+              << config_.num_threads << " threads..." << std::endl;
+    
+    // Use vector of vectors with mutex for thread safety
+    std::vector<GameEpisode> all_episodes;
+    std::mutex episodes_mutex;
+    
+    // Counter for completed episodes
+    std::atomic<int> completed_episodes(0);
+    
+    // Parallel section - each thread handles multiple episodes
+    #pragma omp parallel
+    {
+      int thread_id = omp_get_thread_num();
+      int num_threads = omp_get_num_threads();
+      
+      // Create a single self-play instance per thread to reuse across multiple episodes
+      auto &thread_self_play = GetThreadLocalInstance<SelfPlay<GameType>>([&]() {
+        return new SelfPlay<GameType>(network_, config_, current_temperature_);
       });
-   
-      GameEpisode episode = local_self_play.ExecuteEpisode();
-
-      // Enter critical section to safely update shared data.
-      #ifdef _OPENMP
-      #pragma omp critical
-      #endif
-          {
-            episodes.push_back(std::move(episode));
+      
+      // Calculate episode range for this thread - ensure positive size
+      int episodes_per_thread = std::max(1, (config_.episodes_per_iteration + num_threads - 1) / num_threads);
+      int start_idx = thread_id * episodes_per_thread;
+      int end_idx = std::min(start_idx + episodes_per_thread, config_.episodes_per_iteration);
+      
+      // Local vector to store this thread's episodes
+      std::vector<GameEpisode> thread_episodes;
+      if (start_idx < config_.episodes_per_iteration) {
+        // Only reserve if we have a valid range
+        thread_episodes.reserve(end_idx - start_idx);
+      
+        // Process all episodes assigned to this thread
+        for (int i = start_idx; i < end_idx; i++) {
+          auto episode = thread_self_play.ExecuteEpisode();
+          thread_episodes.push_back(std::move(episode));
+          
+          // Increment the counter and update progress display
+          int current_completed = ++completed_episodes;
+          
+          // Update progress less frequently to reduce contention
+          if (current_completed % 5 == 0 || current_completed == config_.episodes_per_iteration) {
+            #pragma omp critical
+            {
+              std::cout << "Episodes completed: " << current_completed << "/" 
+                        << config_.episodes_per_iteration << "\r" << std::flush;
+            }
           }
-      });
-
-      return episodes;
+        }
+        
+        // Add this thread's episodes to the main collection with thread safety
+        std::lock_guard<std::mutex> lock(episodes_mutex);
+        all_episodes.insert(all_episodes.end(), 
+                           std::make_move_iterator(thread_episodes.begin()),
+                           std::make_move_iterator(thread_episodes.end()));
+      }
+    }
+    
+    std::cout << "\nCompleted generating " << all_episodes.size() << " episodes." << std::endl;
+    return all_episodes;
   }
 
   GameEpisode ExecuteEpisode() {

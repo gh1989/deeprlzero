@@ -176,13 +176,15 @@ int MCTS::SelectMove(const Game* state, float temperature) {
     auto valid_moves = state->GetValidMoves();
     auto probs = GetActionProbabilities(state, temperature);
     
+    /*
     std::cout << "\nProbabilities:";
     for (size_t i = 0; i < probs.size(); ++i) {
         std::cout << " " << i << ":" << probs[i];
     }
     std::cout << "\n";
-
+    */
     // Debug visit counts
+    /*
     std::cout << "\nMove selection debug:";
     std::cout << "\nVisit counts:";
     for (size_t i = 0; i < root_->children.size(); ++i) {
@@ -191,8 +193,8 @@ int MCTS::SelectMove(const Game* state, float temperature) {
         }
     }
     std::cout << "\n";
-
-    // Select move based on probabilities
+    */
+  // Select move based on probabilities
     if (temperature == 0.0f) {
         float max_prob = -1.0f;
         int best_move = -1;

@@ -15,43 +15,32 @@ NetworkManager::NetworkManager(const Config& config)
 bool NetworkManager::AcceptOrRejectNewNetwork(
     std::shared_ptr<NeuralNetwork> network,
     EvaluationStats evaluation_stats) {
-  // Calculate the sum over all evaluation outcomes.
-  int sum = evaluation_stats.win_rate + evaluation_stats.draw_rate +
-            evaluation_stats.loss_rate;
-
-  // Reject the network if its loss rate is too high.
-  // loss_threshold is now provided by the config.
-  if (evaluation_stats.loss_rate > config_.loss_threshold) {
-    logger_.LogFormat("  × Network rejected due to high loss rate: {}",
-                      evaluation_stats.loss_rate);
-    return false;
-  }
-
-  // For first-time acceptance, when no best model exists yet.
-  if ((best_evaluation_stats_.win_rate == 0) &&
-      (best_evaluation_stats_.draw_rate == 0) &&
-      (best_evaluation_stats_.loss_rate == 0)) {
-    std::cout << "No existing best model found. Starting with fresh network."
-              << std::endl;
+  
+  // For first-time acceptance (no prior best model)
+  if (!best_network_) {
+    std::cout << "No existing best model found. Accepting initial network." << std::endl;
     best_network_ = network;
     best_evaluation_stats_ = evaluation_stats;
     best_iteration_ = current_iteration_;
     SaveBestNetwork();
-    logger_.LogFormat("  ✓ New network accepted (initial acceptance)!");
     return true;
   }
 
-  float new_performance = (evaluation_stats.win_rate + evaluation_stats.draw_rate);
-  if (new_performance >= config_.acceptance_threshold && 
-        evaluation_stats.loss_rate <= config_.loss_threshold) {
+  // Calculate score using standard scoring: win=1, draw=0.5, loss=0
+  float score = evaluation_stats.win_rate + (0.5f * evaluation_stats.draw_rate);
+  
+  // Accept if score exceeds threshold
+  if (score > config_.acceptance_threshold) {
+    std::cout << "\nNetwork ACCEPTED: Score (" << score << ") > Threshold (" 
+              << config_.acceptance_threshold << ")" << std::endl;
     best_network_ = network;
     best_evaluation_stats_ = evaluation_stats;
     best_iteration_ = current_iteration_;
     SaveBestNetwork();
-    logger_.LogFormat("  ✓ New network accepted (meets config threshold)!");
     return true;
   } else {
-    logger_.LogFormat("  × Network rejected (performance below config threshold).");
+    std::cout << "\nNetwork REJECTED: Score (" << score << ") <= Threshold (" 
+              << config_.acceptance_threshold << ")" << std::endl;
     return false;
   }
 }

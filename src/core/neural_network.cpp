@@ -40,6 +40,11 @@ NeuralNetwork::NeuralNetwork(const Config& config) :
 }
 
 std::pair<torch::Tensor, torch::Tensor> NeuralNetwork::forward(torch::Tensor x) {
+  std::lock_guard<std::mutex> lock(*forward_mutex_);
+  return forward_impl(x);
+}
+
+std::pair<torch::Tensor, torch::Tensor> NeuralNetwork::forward_impl(torch::Tensor x) {
   //std::lock_guard<std::mutex> lock(*forward_mutex_);
   
   // Initial convolution

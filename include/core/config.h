@@ -20,7 +20,7 @@ class Config {
   float temperature_decay = 1.00f;
   
   // MCTS configuration
-  int num_simulations = 100;
+  int num_simulations = 16;
   float c_puct = 3.0;
   float temperature = 1.5;
   int action_size = 9;       // Total number of possible actions
