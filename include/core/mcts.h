@@ -22,8 +22,14 @@ struct Node {
     int depth = 0;
 
     explicit Node(const Config& config) 
-        : parent(nullptr), visit_count(0), value_sum(0.0f), prior(0.0f), action(-1) {
-        children.resize(config.board_size);
+        : value_sum(0.0f),
+          visit_count(0),
+          expanded(false),
+          prior(0.0f),
+          parent(nullptr),
+          action(-1),
+          depth(0) {
+        children.resize(config.action_size);  // No second argument
     }
 
     float GetValue() const {
@@ -51,15 +57,11 @@ public:
     MCTS(std::shared_ptr<NeuralNetwork> network, const Config& config);
     
     std::vector<float> GetActionProbabilities(const Game* state, float temperature = 1.0f);
-    int SelectMove(const Game* state, float temperature = 0.0f);
+    int SelectMove(const Game* state, float temperature);
 
     void ResetRoot();
 
-    std::vector<Game*> evaluation_queue_;
     Node* GetRoot() const { return root_.get(); }
-    // Batch evaluation method
-    std::vector<std::pair<std::vector<float>, float>> 
-    BatchEvaluate(const std::vector<Game*>& states);
 
     // Add stats getter
     const MCTSStats& GetStats() const { return stats_; }

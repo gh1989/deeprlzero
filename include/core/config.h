@@ -23,8 +23,7 @@ class Config {
   int num_simulations = 100;
   float c_puct = 3.0;
   float temperature = 1.5;
-  int board_size = 9;        
-  int action_size = 9;
+  int action_size = 9;       // Total number of possible actions
   int mcts_batch_size = 64; 
   float gamma_alpha = 0.3f; 
   float gamma_beta = 1.0f;  
@@ -87,6 +86,8 @@ class Config {
         config.num_evaluation_games = std::stoi(argv[++i]);
       } else if (arg == "-l" || arg == "--loss-threshold") {
         config.loss_threshold = std::stof(argv[++i]);
+      } else if (arg == "-x" || arg == "--threads") {
+        config.num_threads = std::stoi(argv[++i]);
       } else if (arg == "-a" || arg == "--acceptance-threshold") {
         config.acceptance_threshold = std::stof(argv[++i]);
       } else if (arg == "-h" || arg == "--help") {

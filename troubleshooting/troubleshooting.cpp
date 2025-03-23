@@ -10,7 +10,6 @@
 #include <vector>
 #include <numeric>
 #include <cassert>
-#include <iomanip>
 
 #include "core/trainer.h"
 #include "core/self_play.h"
@@ -209,8 +208,8 @@ void CheckNetworkUpdates() {
   
   // Compute network predictions.
   auto output = network->forward(state);
-  auto policy_preds = std::get<0>(output);
-  auto value_preds = std::get<1>(output);
+  auto policy_preds = output.first;
+  auto value_preds = output.second;
   
   // Compute the losses.
   auto loss_policy = trainer.ComputePolicyLoss(policy_preds, policy_target);
@@ -249,7 +248,7 @@ void TestExecuteEpisodeSelfPlay() {
 
   Config config = TestConfig();
   auto network = std::make_shared<NeuralNetwork>(1, 16, 9, 1);
-  SelfPlay<TicTacToe> self_play(network, config);
+  SelfPlay<TicTacToe> self_play(network, config, config.initial_temperature);
 
   GameEpisode episode = self_play.ExecuteEpisode();
   bool passed = true;
@@ -302,7 +301,7 @@ void PrintSelfPlayEpisode() {
 
   Config config = TestConfig();
   auto network = std::make_shared<NeuralNetwork>(1, 16, 9, 1);
-  SelfPlay<TicTacToe> self_play(network, config);
+  SelfPlay<TicTacToe> self_play(network, config, config.initial_temperature);
 
   GameEpisode episode = self_play.ExecuteEpisode();
 
@@ -408,7 +407,7 @@ void TestMCTSHasStats() {
 void TestSelfPlayStats() {
     Config config = TestConfig();
     auto network = std::make_shared<NeuralNetwork>(1, 16, 9, 1);
-    SelfPlay<TicTacToe> self_play(network, config);
+    SelfPlay<TicTacToe> self_play(network, config, config.initial_temperature);
     auto stats = self_play.GetStats();
     stats.LogStatistics();
 }
@@ -426,7 +425,7 @@ void TestParallelFor() {
   ParallelFor(config.episodes_per_iteration, [&](int episode_idx) {
     // Get a thread-local SelfPlay instance using the factory function.
     auto &local_self_play = GetThreadLocalInstance<SelfPlay<TicTacToe>>([&]() {
-      return new SelfPlay<TicTacToe>(network, config);
+      return new SelfPlay<TicTacToe>(network, config, config.initial_temperature);
     });
 
     // Execute a self-play episode.
@@ -459,21 +458,21 @@ void TestAllEpisodes() {
 }
 
 void TestEpisodesQuality() {
-  std::vector<GameEpisode> episodes;
-  auto network = std::make_shared<NeuralNetwork>(1, 16, 9, 1);
-  Config config = TestConfig();
-  auto self_play = std::make_unique<SelfPlay<TicTacToe>>(network, config);
-  for (int i = 0; i < 100; ++i) {
-    episodes.push_back(self_play->ExecuteEpisode());
-  }
+    std::vector<GameEpisode> episodes;
+    auto network = std::make_shared<NeuralNetwork>(1, 16, 9, 1);
+    Config config = TestConfig();
+    auto self_play = std::make_unique<SelfPlay<TicTacToe>>(network, config, config.initial_temperature);
+    for (int i = 0; i < 100; ++i) {
+      episodes.push_back(self_play->ExecuteEpisode());
+    }
 
-  std::cout << "Episodes: " << episodes.size() << std::endl;
+    std::cout << "Episodes: " << episodes.size() << std::endl;
   
-  for (const auto& episode : episodes) {
-    std::cout << std::format("Episode: {} Policy: {} Values: {} Outcome: {}", episode.boards.size(), episode.policies.size(), episode.values.size(), episode.outcome) << std::endl;
+    for (const auto& episode : episodes) {
+      std::cout << std::format("Episode: {} Policy: {} Values: {} Outcome: {}", episode.boards.size(), episode.policies.size(), episode.values.size(), episode.outcome) << std::endl;
 
-    // Print board rows across all moves in this episode
-    for (int row = 0; row < 3; row++) {
+      // Print board rows across all moves in this episode
+      for (int row = 0; row < 3; row++) {
         for (size_t move = 0; move < episode.boards.size(); move++) {
             auto board_tensor = episode.boards[move];
             // Access the tensor data correctly
@@ -489,10 +488,100 @@ void TestEpisodesQuality() {
             std::cout << "   "; // Space between boards
         }
         std::cout << std::endl;
+      }
+      std::cout << std::endl; // Space between episodes
     }
-    std::cout << std::endl; // Space between episodes
   }
-}
+
+  void TestEvaluationLogicIssueDeterministic() {
+    Config config = TestConfig();
+    int wins = 0, draws = 0, losses = 0;
+    const int total_games = config.num_evaluation_games;
+    
+    auto network = std::make_shared<NeuralNetwork>(1, 16, 9, 1);
+    auto opponent = std::make_shared<NeuralNetwork>(1, 16, 9, 1);
+
+    // Check if networks are identical by comparing their parameters
+    bool networks_identical = true;
+    auto main_params = network->parameters();
+    auto opp_params = opponent->parameters();
+    
+    if (main_params.size() != opp_params.size()) {
+        networks_identical = false;
+    } else {
+        for (size_t i = 0; i < main_params.size(); i++) {
+            if (!torch::equal(main_params[i], opp_params[i])) {
+                networks_identical = false;
+                break;
+            }
+        }
+    }
+    
+    if (networks_identical) {
+        throw std::runtime_error("Evaluator: Cannot evaluate a network against an identical network!");
+    }
+
+    auto output_main = network->forward(torch::zeros({1, 1, 3, 3}));
+    auto output_opponent = opponent->forward(torch::zeros({1, 1, 3, 3}));
+
+    std::cout << "Output main: " << output_main << std::endl;
+    std::cout << "Output opponent: " << output_opponent << std::endl;
+
+    MCTS mcts_main(network, config);
+    MCTS mcts_opponent(opponent, config);
+    
+    for (int i = 0; i < total_games; ++i) {
+        auto game = std::make_unique<TicTacToe>();
+        bool network_plays_first = (i % 2 == 0);
+        
+        std::cout << "\nGame " << i << ": Main network plays " 
+                  << (network_plays_first ? "first" : "second") << "\n";
+        int move_count = 0;
+        
+        while (!game->IsTerminal()) {
+            bool is_network_turn = ((game->GetCurrentPlayer() == 1) == network_plays_first);
+            
+            if (is_network_turn) {
+                mcts_main.ResetRoot();
+                for (int sim = 0; sim < config.num_simulations; ++sim) {
+                    mcts_main.Search(game.get(), mcts_main.GetRoot());
+                }
+                int action = mcts_main.SelectMove(game.get(), 0.0f);
+                std::cout << "Main network move " << move_count << ": " << action << "\n";
+                game->MakeMove(action);
+            } else {
+                mcts_opponent.ResetRoot();
+                for (int sim = 0; sim < config.num_simulations; ++sim) {
+                    mcts_opponent.Search(game.get(), mcts_opponent.GetRoot());
+                }
+                int action = mcts_opponent.SelectMove(game.get(), 0.0f);
+                std::cout << "Opponent move " << move_count << ": " << action << "\n";
+                game->MakeMove(action);
+            }
+            move_count++;
+        }
+        
+        float result = game->GetGameResult();
+        float perspective_result = network_plays_first ? result : -result;
+        
+        if (perspective_result > 0) {
+            wins++;
+            std::cout << "Main network WON\n";
+        } else if (perspective_result == 0) {
+            draws++;
+            std::cout << "DRAW\n";
+        } else {
+            losses++;
+            std::cout << "Main network LOST\n";
+        }
+    }
+    
+    EvaluationStats stats;
+    stats.win_rate = static_cast<float>(wins) / total_games;
+    stats.draw_rate = static_cast<float>(draws) / total_games;
+    stats.loss_rate = static_cast<float>(losses) / total_games;
+    std::cout << "EvaluationStats: " << stats.win_rate << ", " << stats.draw_rate << ", " << stats.loss_rate << std::endl;
+  }
 }
 
 int main() {
@@ -514,9 +603,10 @@ int main() {
     TestMergeAndClearStats();
     TestSelfPlayStats();
     TestMCTSHasStats();
-    TestParallelFor();
+    TestEvaluationLogicIssueDeterministic();
+    //TestParallelFor();
     //TestAllEpisodes();
-    TestEpisodesQuality();
+    //TestEpisodesQuality();
     std::cout << "\nAll tests completed\n";
     return 0;
   } catch (const std::exception& e) {

@@ -9,6 +9,7 @@ NetworkManager::NetworkManager(const Config& config)
     : config_(config), 
       current_temperature_(config.initial_temperature)
       {
+        std::cout << "NetworkManager initialized with temperature: " << current_temperature_ << std::endl;
       }
 
 bool NetworkManager::AcceptOrRejectNewNetwork(
@@ -69,14 +70,22 @@ void NetworkManager::SaveBestNetwork() const {
 }
 
 void NetworkManager::SetBestNetwork(std::shared_ptr<NeuralNetwork> network) {
-    best_network_ = network;
+    // Get the device of the source network
+    auto device = network->parameters().begin()->device();
+    // Create deep copy and cast back to NeuralNetwork
+    best_network_ = std::dynamic_pointer_cast<NeuralNetwork>(network->clone(device));
+    
+    if (!best_network_) {
+        throw std::runtime_error("Failed to create deep copy of network in SetBestNetwork");
+    }
 }
 
 std::shared_ptr<NeuralNetwork> NetworkManager::CreateInitialNetwork() {
+   
     auto network = std::make_shared<NeuralNetwork>(
         1,  // input channels
         config_.num_filters,
-        9,  // num_actions for TicTacToe
+        config_.action_size,
         config_.num_residual_blocks
     );
     return network;
@@ -104,4 +113,18 @@ bool NetworkManager::LoadBestNetwork() {
     }
 }
 
-}  // namespace alphazero 
+std::shared_ptr<NeuralNetwork> NetworkManager::GetBestNetwork() {
+    // Create a fresh clone on the desired device and ensure all tensors are there
+    auto device = torch::Device(torch::kCPU);
+    auto cloned_network = std::dynamic_pointer_cast<NeuralNetwork>(best_network_->clone(device));
+    
+    // Explicitly ensure all tensors are on the same device
+    cloned_network->to(device);
+    
+    return cloned_network;
+}
+
+}  // namespace alphazero   
+  // Keep these methods for file path-based serialization
+  void save(const std::string& path);
+  void load(const std::string& path);

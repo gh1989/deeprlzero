@@ -15,14 +15,9 @@
 
 int main(int argc, char** argv) {
     auto config = alphazero::Config::ParseCommandLine(argc, argv);
-    
-    // Initialize logger
     auto& logger = alphazero::Logger::GetInstance(config);
-    
-    // Initialize network manager and create network
     alphazero::NetworkManager network_manager(config);
     
-    // Check CUDA availability before proceeding
     if (!torch::cuda::is_available()) {
         if (auto result = logger.Log("ERROR: CUDA is not available. This program requires a CUDA-capable GPU for training."); 
             !result) {
@@ -32,65 +27,65 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Create an initial network then load the best if possible.    
+/*
+    if(!network_manager.LoadBestNetwork()) {
+        auto network = network_manager.CreateInitialNetwork();
+        network_manager.SetBestNetwork(network);
+    }
+*/
+
     auto network = network_manager.CreateInitialNetwork();
     network_manager.SetBestNetwork(network);
-    network_manager.LoadBestNetwork();
-    
-    // After loading or creating the network
-    network->to(torch::kCPU);  // Start on CPU for self-play
-    network->eval();
 
-    // Initialize self-play and trainer
-    alphazero::SelfPlay<alphazero::TicTacToe> self_play(network, config);
-    alphazero::Trainer trainer(network, config);
-
-    // Aggregated MCTS statistics.
     alphazero::MCTSStats aggregated_stats;
 
     for (int iter = 0; iter < config.num_iterations; ++iter) {
+        auto current_best_network = network_manager.GetBestNetwork();
+        auto network_to_train = std::dynamic_pointer_cast<alphazero::NeuralNetwork>(current_best_network->clone(torch::kCPU));
+
+        // Create the necessary objects with proper template parameter
+        alphazero::SelfPlay<alphazero::TicTacToe> self_play(
+            network_manager.GetBestNetwork(), 
+            config,
+            network_manager.GetCurrentTemperature()
+        );
+        alphazero::Trainer trainer(network_to_train, config);
+        alphazero::Evaluator evaluator(network_manager.GetBestNetwork(), config);
+
         if (auto log_result = logger.LogFormat("Starting iteration {}/{}", iter + 1, config.num_iterations); !log_result) {
             std::cerr << "Failed to log iteration start" << std::endl;
         }
 
-        auto episodes = self_play.ExecuteEpisodesParallel();
+        //Generate the episodes with the best network.
+        auto episodes = std::vector<alphazero::GameEpisode>();
+        for (int i = 0; i < config.episodes_per_iteration; ++i) {
+            episodes.push_back(self_play.ExecuteEpisode());
+        }
         
-      if (auto result = logger.Log("Completed self-play episodes generation."); !result) {
-          std::cerr << "Failed to log completion" << std::endl;
-      }
-
-        // Training phase (on GPU)
-        trainer.Train(network, episodes);
-        
-        // Evaluation phase (on CPU)
-        //network->to(torch::kCPU);
-        network->eval();
-        alphazero::Evaluator evaluator(network, config);
-        alphazero::EvaluationStats win_rate = evaluator.EvaluateAgainstNetwork(network_manager.GetBestNetwork());
+        if (auto result = logger.Log("Completed self-play episodes generation."); !result) {
+            std::cerr << "Failed to log completion" << std::endl;
+        }
+        //Train the clone of the best network with these episodes
+        trainer.Train(episodes);
+        //Now which network should be instantiated for the evaluator? and which one is the argument?
+        alphazero::EvaluationStats evaluation_stats = evaluator.EvaluateAgainstNetwork(network_to_train);
         
         if (auto result = logger.LogFormat("Iteration {} Summary:\n  Win Rate vs Best: {}\n  Temperature: {}", 
-            iter + 1, win_rate.WinStats(), network_manager.GetCurrentTemperature()); !result) {
+            iter + 1, evaluation_stats.WinStats(), network_manager.GetCurrentTemperature()); !result) {
             std::cerr << "Failed to log iteration summary" << std::endl;
         }
-        
-        // Accept or reject new network
-        if (!network_manager.AcceptOrRejectNewNetwork(network, win_rate)) {
-            network = network_manager.GetBestNetwork();
-        }
-        
-        // Update temperature for next iteration
+                
+        network_manager.AcceptOrRejectNewNetwork(network_to_train, evaluation_stats);
         network_manager.UpdateTemperature();
     }
     
     // Save final model
     torch::serialize::OutputArchive final_archive;
-    network->save(final_archive);
-    final_archive.save_to(config.model_path);
+    network_manager.GetBestNetwork()->save(final_archive);
+    //final_archive.save_to(config.model_path);
     
     // Final evaluation
-    network->to(torch::kCPU);
-    network->eval();
-    alphazero::Evaluator final_evaluator(network, config);
+    alphazero::Evaluator final_evaluator(network_manager.GetBestNetwork(), config);
     alphazero::EvaluationStats final_win_rate_best = final_evaluator.EvaluateAgainstNetwork(network_manager.GetBestNetwork());
     alphazero::EvaluationStats final_win_rate_random = final_evaluator.EvaluateAgainstRandom();
     
@@ -100,6 +95,5 @@ int main(int argc, char** argv) {
     }
     
     aggregated_stats.LogStatistics();
-
     return 0;
 } 

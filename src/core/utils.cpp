@@ -34,7 +34,7 @@ static void GenerateAllEpisodesHelper(std::unique_ptr<TicTacToe> game,
   std::vector<int> valid_moves = game->GetValidMoves();
   for (int move : valid_moves) {
     // Clone the current game state.
-    std::unique_ptr<Game> game_clone = game->Clone();
+    std::unique_ptr<Game> game_clone = game->clone();
     // We know the game is TicTacToe.
     TicTacToe* ttt_ptr = static_cast<TicTacToe*>(game_clone.release());
     std::unique_ptr<TicTacToe> new_game(ttt_ptr);

@@ -21,7 +21,7 @@ class NetworkManager {
   bool AcceptOrRejectNewNetwork(std::shared_ptr<NeuralNetwork> network, EvaluationStats evaluation_stats);
   void UpdateTemperature();
   float GetCurrentTemperature() const { return current_temperature_; }
-  std::shared_ptr<NeuralNetwork> GetBestNetwork() const { return best_network_; }
+  std::shared_ptr<NeuralNetwork> GetBestNetwork();
   
   void SaveBestNetwork() const;
   

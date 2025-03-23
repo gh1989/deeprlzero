@@ -43,11 +43,9 @@ public:
 
     EvaluationStats EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> opponent);
 
-    // New detailed evaluation method.
-    EvaluationStats EvaluateAgainstNetworkDetailed(
-        std::shared_ptr<NeuralNetwork> opponent);
-
 private:
+    bool IsIdenticalNetwork(std::shared_ptr<NeuralNetwork> network1, 
+                            std::shared_ptr<NeuralNetwork> network2);
     static constexpr int kNumEvaluationGames = 100;  // Fixed constant
     std::shared_ptr<NeuralNetwork> network_;
     const Config& config_;

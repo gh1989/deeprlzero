@@ -17,7 +17,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Set build-type specific flags
-set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -Wall -Wextra -Wpedantic")
+set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -Wall -Wextra -Wpedantic -fno-omit-frame-pointer -pg")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -DNDEBUG")
 set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG")
@@ -25,6 +25,11 @@ set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG")
 # CUDA flags based on build type
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -g -O0")
+    # Function to enable profiling only in debug
+    function(enable_profiling target)
+        target_compile_options(${target} PRIVATE $<$<CONFIG:Debug>:-pg -fno-omit-frame-pointer>)
+        target_link_options(${target} PRIVATE $<$<CONFIG:Debug>:-pg>)
+    endfunction()
 else()
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3")
 endif()
@@ -136,4 +141,19 @@ message(STATUS "C++ compiler: ${CMAKE_CXX_COMPILER}")
 message(STATUS "CUDA compiler: ${CMAKE_CUDA_COMPILER}")
 message(STATUS "Torch version: ${Torch_VERSION}")
 message(STATUS "OpenMP found: ${OpenMP_CXX_FOUND}")
+
+# Enable profiling for your targets (will only apply in Debug)
+enable_profiling(alphazero_lib)
+enable_profiling(train_alphazero)
+enable_profiling(mcts_executable)
+
+# Add gradient test executable
+add_executable(gradient_test src/gradient_test.cpp)
+target_link_libraries(gradient_test PRIVATE alphazero_lib ${TORCH_LIBRARIES})
+set_property(TARGET gradient_test PROPERTY CXX_STANDARD 23)
+
+# Add gradient test executable
+add_executable(min_net_test src/minimal_net_test.cpp)
+target_link_libraries(min_net_test PRIVATE alphazero_lib ${TORCH_LIBRARIES})
+set_property(TARGET min_net_test PROPERTY CXX_STANDARD 23)
 

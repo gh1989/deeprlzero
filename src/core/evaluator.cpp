@@ -10,10 +10,69 @@ namespace alphazero {
 Evaluator::Evaluator(std::shared_ptr<NeuralNetwork> network, const Config& config)
     : network_(network), config_(config) {}
 
-EvaluationStats Evaluator::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> opponent) {
-    int wins = 0;
-    int draws = 0;
-    int losses = 0;
+bool Evaluator::IsIdenticalNetwork(std::shared_ptr<NeuralNetwork> network1, 
+                                    std::shared_ptr<NeuralNetwork> network2) {
+    // Check if networks are identical by comparing their parameters
+    bool networks_identical = true;
+    auto main_params = network1->parameters();
+    auto opp_params = network2->parameters();
+    
+    if (main_params.size() != opp_params.size()) {
+        networks_identical = false;
+    } else {
+        for (size_t i = 0; i < main_params.size(); i++) {
+            if (!torch::equal(main_params[i], opp_params[i])) {
+                networks_identical = false;
+                break;
+            }
+        }
+    }
+    return networks_identical;
+}
+
+EvaluationStats Evaluator::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> opponent) {    
+    network_->to(torch::kCPU);
+    network_->eval();
+    opponent->to(torch::kCPU);
+    opponent->eval();
+    
+{
+        // Debug main network parameters
+        float main_param_sum = 0.0f;
+        int main_param_count = 0;
+        for (const auto& param : network_->parameters()) {
+            auto data = param.data_ptr<float>();
+            for (int64_t i = 0; i < param.numel(); ++i) {
+                main_param_sum += std::abs(data[i]);
+                main_param_count++;
+            }
+        }
+        
+        // Debug opponent network parameters
+        float opp_param_sum = 0.0f;
+        int opp_param_count = 0;
+        for (const auto& param : opponent->parameters()) {
+            auto data = param.data_ptr<float>();
+            for (int64_t i = 0; i < param.numel(); ++i) {
+                opp_param_sum += std::abs(data[i]);
+                opp_param_count++;
+            }
+        }
+        
+        std::cout << "\n=== EVALUATION NETWORKS COMPARISON ===" << std::endl;
+        std::cout << "Main network: sum=" << main_param_sum 
+                  << ", avg=" << (main_param_sum / main_param_count) << std::endl;
+        std::cout << "Opponent network: sum=" << opp_param_sum 
+                  << ", avg=" << (opp_param_sum / opp_param_count) << std::endl;
+        std::cout << "Different?: " << (std::abs(main_param_sum - opp_param_sum) > 1e-6 ? "YES" : "NO") << std::endl;
+        std::cout << "=====================================\n" << std::endl;
+    }
+
+    if (IsIdenticalNetwork(network_, opponent)) {
+        throw std::runtime_error("Evaluator: Cannot evaluate a network against an identical network!");
+    }
+    
+    int wins = 0, draws = 0, losses = 0;
     const int total_games = config_.num_evaluation_games;
     
     MCTS mcts_main(network_, config_);
@@ -23,6 +82,10 @@ EvaluationStats Evaluator::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork>
         auto game = std::make_unique<TicTacToe>();
         bool network_plays_first = (i % 2 == 0);
         
+        std::cout << "\nGame " << i << ": Main network plays " 
+                  << (network_plays_first ? "first" : "second") << "\n";
+        int move_count = 0;
+        
         while (!game->IsTerminal()) {
             bool is_network_turn = ((game->GetCurrentPlayer() == 1) == network_plays_first);
             
@@ -31,26 +94,33 @@ EvaluationStats Evaluator::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork>
                 for (int sim = 0; sim < config_.num_simulations; ++sim) {
                     mcts_main.Search(game.get(), mcts_main.GetRoot());
                 }
-                int action = mcts_main.SelectMove(game.get(), 0.0f);
+                int action = mcts_main.SelectMove(game.get(), 0.6f);
+                std::cout << "Main network move " << move_count << ": " << action << "\n";
                 game->MakeMove(action);
             } else {
                 mcts_opponent.ResetRoot();
                 for (int sim = 0; sim < config_.num_simulations; ++sim) {
                     mcts_opponent.Search(game.get(), mcts_opponent.GetRoot());
                 }
-                int action = mcts_opponent.SelectMove(game.get(), 0.0f);
+                int action = mcts_opponent.SelectMove(game.get(), 0.6f);
+                std::cout << "Opponent move " << move_count << ": " << action << "\n";
                 game->MakeMove(action);
             }
+            move_count++;
         }
         
         float result = game->GetGameResult();
-        if ((network_plays_first && result == 1.0f) ||
-            (!network_plays_first && result == -1.0f)) {
-            wins++;
-        } else if (result == 0.0f) {
+        float perspective_result = network_plays_first ? result : -result;
+        
+        if (perspective_result > 0) {
+            losses++;  // Opponent lost
+            std::cout << "Opponent LOST\n";
+        } else if (perspective_result == 0) {
             draws++;
+            std::cout << "DRAW\n";
         } else {
-            losses++;
+            wins++;  // Opponent won
+            std::cout << "Opponent WON\n";
         }
     }
     
@@ -92,55 +162,11 @@ EvaluationStats Evaluator::EvaluateAgainstRandom() {
         }
         
         float result = game->GetGameResult();
-        if ((network_plays_first && result == 1.0f) ||
-            (!network_plays_first && result == -1.0f)) {
-            wins++;
-        } else if (result == 0.0f) {
-            draws++;
-        } else {
-            losses++;
-        }
-    }
-    
-    EvaluationStats stats;
-    stats.win_rate = static_cast<float>(wins) / total_games;
-    stats.draw_rate = static_cast<float>(draws) / total_games;
-    stats.loss_rate = static_cast<float>(losses) / total_games;
-    return stats;
-}
-
-// New method: detailed evaluation that counts wins, draws, and losses.
-EvaluationStats Evaluator::EvaluateAgainstNetworkDetailed(
-    std::shared_ptr<NeuralNetwork> opponent) {
-    int wins = 0;
-    int draws = 0;
-    int losses = 0;
-    const int total_games = config_.num_evaluation_games;
-    
-    MCTS mcts_main(network_, config_);
-    MCTS mcts_opponent(opponent, config_);
-    
-    for (int i = 0; i < total_games; ++i) {
-        auto game = std::make_unique<TicTacToe>();
-        bool network_plays_first = (i % 2 == 0);
+        float perspective_result = network_plays_first ? result : -result;
         
-        while (!game->IsTerminal()) {
-            bool is_network_turn = (game->GetCurrentPlayer() == 1) == network_plays_first;
-            
-            if (is_network_turn) {
-                int action = mcts_main.SelectMove(game.get(), 0.0f);
-                game->MakeMove(action);
-            } else {
-                int action = mcts_opponent.SelectMove(game.get(), 0.0f);
-                game->MakeMove(action);
-            }
-        }
-        
-        float result = game->GetGameResult();
-        if ((network_plays_first && result == 1.0f) ||
-            (!network_plays_first && result == -1.0f)) {
+        if (perspective_result > 0) {
             wins++;
-        } else if (result == 0.0f) {
+        } else if (perspective_result == 0) {
             draws++;
         } else {
             losses++;
