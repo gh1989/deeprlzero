@@ -72,7 +72,7 @@ void NetworkManager::SetBestNetwork(std::shared_ptr<NeuralNetwork> network) {
 std::shared_ptr<NeuralNetwork> NetworkManager::CreateInitialNetwork() {
    
     auto network = std::make_shared<NeuralNetwork>(
-        1,  // input channels
+        3,  // input channels
         config_.num_filters,
         config_.action_size,
         config_.num_residual_blocks

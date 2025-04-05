@@ -44,7 +44,7 @@ void TicTacToe::MakeMove(int move) {
 float TicTacToe::GetGameResult() const {
     if (CheckWin(1)) return 1.0f;
     if (CheckWin(-1)) return -1.0f;
-    if (IsBoardFull()) return 0.0f;  // Draw is 0 in Python version
+    if (IsBoardFull()) return 0.0f;  
     return 0.0f;  // Ongoing
 }
 
@@ -53,13 +53,19 @@ bool TicTacToe::IsTerminal() const {
 }
 
 torch::Tensor TicTacToe::GetCanonicalBoard() const {
-    auto tensor = torch::zeros({1, kBoardSize, kBoardSize});
+    auto tensor = torch::zeros({3, kBoardSize, kBoardSize});  // 3 channels!
     auto accessor = tensor.accessor<float, 3>();
     
-    // Single channel with -1/0/1 values from current player's perspective
     for (int i = 0; i < kBoardSize; ++i) {
         for (int j = 0; j < kBoardSize; ++j) {
-            accessor[0][i][j] = board_[i][j] * current_player_;
+            // Channel 0: Current player pieces (binary mask)
+            accessor[0][i][j] = (board_[i][j] == current_player_) ? 1.0f : 0.0f;
+            
+            // Channel 1: Opponent pieces (binary mask)
+            accessor[1][i][j] = (board_[i][j] == -current_player_) ? 1.0f : 0.0f;
+            
+            // Channel 2: Turn indicator (all 1s if player 1, all 0s if player 2)
+            accessor[2][i][j] = (current_player_ == 1) ? 1.0f : 0.0f;
         }
     }
     return tensor;

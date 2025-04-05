@@ -52,13 +52,15 @@ int main(int argc, char** argv) {
         }
 
         //Generate the episodes with the best network.
-        auto episodes = self_play.ExecuteEpisodesParallel();
-        /*
-        auto episodes = std::vector<alphazero::GameEpisode>();
-        for (int i = 0; i < config.episodes_per_iteration; ++i) {
-            episodes.push_back(self_play.ExecuteEpisode());
+        std::vector<alphazero::GameEpisode> episodes;
+
+        if (config.num_threads > 1) {
+            episodes = self_play.ExecuteEpisodesParallel();
+        } else {
+            for (int i = 0; i < config.episodes_per_iteration; ++i) {
+                episodes.push_back(self_play.ExecuteEpisode());
+            }
         }
-        */
         
         if (auto result = logger.Log("Completed self-play episodes generation."); !result) {
             std::cerr << "Failed to log completion" << std::endl;

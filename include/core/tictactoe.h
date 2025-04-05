@@ -10,7 +10,7 @@ class TicTacToe : public Game {
  public:
   static constexpr int kBoardSize = 3;
   static constexpr int kNumActions = 9;
-  static constexpr int kNumChannels = 1;
+  static constexpr int kNumChannels = 3;
   
   TicTacToe();
   

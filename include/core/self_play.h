@@ -157,7 +157,7 @@ class SelfPlay {
       float gamma = 0.99; // Discount factor for future rewards
       float cumulative_value = final_result;
       for (int i = episode.values.size() - 1; i >= 0; --i) {
-          episode.values[i] = (players[i] == 1) ? -cumulative_value : cumulative_value;
+          episode.values[i] = cumulative_value;
           cumulative_value *= gamma; // Apply discount for earlier states
       }
       

@@ -39,7 +39,7 @@ NeuralNetwork::NeuralNetwork(
 
 // Constructor from config
 NeuralNetwork::NeuralNetwork(const Config& config) :
-    NeuralNetwork(1, config.num_filters, config.action_size, config.num_residual_blocks) {
+    NeuralNetwork(3, config.num_filters, config.action_size, config.num_residual_blocks) {
 }
 
 std::pair<torch::Tensor, torch::Tensor> NeuralNetwork::forward(torch::Tensor x) {
@@ -115,7 +115,7 @@ void NeuralNetwork::MoveToDevice(const torch::Device& device) {
 
 void NeuralNetwork::reset() {
   // Get dimensions from existing layers
-  int64_t input_channels = 1; // Default
+  int64_t input_channels = 3; // Default
   int64_t num_actions = 9;    // Default for 3x3 board
   int64_t num_filters = 32;   // Default
 

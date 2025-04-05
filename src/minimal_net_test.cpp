@@ -58,7 +58,7 @@ private:
 // Network with residual blocks
 class ResidualNetwork : public torch::nn::Module {
 public:
-    ResidualNetwork(int input_channels = 1, int num_filters = 32, int num_blocks = 1) 
+    ResidualNetwork(int input_channels = 3, int num_filters = 32, int num_blocks = 1) 
         : conv(register_module("conv", torch::nn::Conv2d(
               torch::nn::Conv2dOptions(input_channels, num_filters, 3).padding(1)))),
           bn(register_module("bn", torch::nn::BatchNorm2d(num_filters))),
