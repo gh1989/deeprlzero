@@ -36,10 +36,22 @@ class Trainer {
                                 const torch::Tensor& value_targets);
   void Train(const std::vector<GameEpisode>& examples);
   
+  // Add getters for training metrics
+  float GetPolicyLoss() const { return last_policy_loss_; }
+  float GetValueLoss() const { return last_value_loss_; }
+  float GetTotalLoss() const { return last_total_loss_; }
+  float GetParameterVariance() const { return last_param_variance_; }
+  
  private:
   const Config& config_;
   std::shared_ptr<NeuralNetwork> network_;
   std::unique_ptr<torch::optim::Adam> optimizer_;
+  
+  // Track the latest losses
+  float last_policy_loss_ = 0.0f;
+  float last_value_loss_ = 0.0f;
+  float last_total_loss_ = 0.0f;
+  float last_param_variance_ = 0.0f;
 };
 
 }  // namespace alphazero

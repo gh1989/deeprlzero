@@ -68,6 +68,8 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
     std::cout << "Values: " << values.sizes() << std::endl;
     */
     
+    torch::Tensor final_policy_preds; // Add this to store the last policy predictions
+    
     for (int epoch = 0; epoch < config_.num_epochs; ++epoch) {
         // Save parameters before update for comparison
         std::vector<torch::Tensor> params_before;
@@ -83,6 +85,11 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
         auto policy_preds = outputs.first;
         auto value_preds = outputs.second;
         
+        // Save the final policy predictions on the last epoch
+        if (epoch == config_.num_epochs - 1) {
+            final_policy_preds = policy_preds.clone().detach();
+        }
+        
         // Make sure all tensors are properly moved to the correct device
         policy_preds = policy_preds.to(device);
         value_preds = value_preds.to(device);
@@ -91,6 +98,11 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
         auto loss_policy = -torch::mean(torch::sum(policies * torch::log_softmax(policy_preds, 1), 1));
         auto loss_value = torch::mse_loss(value_preds, values);
         auto total_loss = loss_policy + loss_value;
+        
+        // Store the latest loss values
+        last_policy_loss_ = loss_policy.item<float>();
+        last_value_loss_ = loss_value.item<float>();
+        last_total_loss_ = total_loss.item<float>();
         
         // Print the device of the loss
         if (epoch == 0) {
@@ -143,25 +155,46 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
                   */
     }
 
-    // Add this at the end of the Train method
-    {
-        // Get parameter fingerprint to verify changes
-        float param_sum = 0.0f;
-        int param_count = 0;
-        
-        for (const auto& param : network_->parameters()) {
-            // Use safer tensor operations instead of direct data_ptr access
-            param_count += param.numel();
-            // Sum absolute values using torch operations
-            param_sum += param.abs().sum().item<float>();
-        }
-        
-        std::cout << "\n=== NETWORK TRAINING COMPLETED ===" << std::endl;
-        std::cout << "Parameter stats: sum=" << param_sum 
-                  << ", avg=" << (param_count > 0 ? param_sum / param_count : 0.0f) 
-                  << ", count=" << param_count << std::endl;
-        std::cout << "================================\n" << std::endl;
+    // After all training epochs, compute parameter statistics for debugging
+    float param_sum = 0.0f;
+    int param_count = 0;
+    float param_square_sum = 0.0f;
+    
+    for (const auto& param : network_->parameters()) {
+        auto flat_param = param.flatten();
+        param_count += param.numel();
+        param_sum += flat_param.abs().sum().item<float>();
+        param_square_sum += flat_param.square().sum().item<float>();
     }
+    
+    float mean = param_sum / param_count;
+    float variance = (param_square_sum / param_count) - (mean * mean);
+    last_param_variance_ = variance;
+    
+    // Store parameter statistics for output
+    std::cout << "\n=== NETWORK TRAINING COMPLETED ===" << std::endl;
+    std::cout << "Policy Loss: " << last_policy_loss_ << std::endl;
+    std::cout << "Value Loss: " << last_value_loss_ << std::endl;
+    std::cout << "Total Loss: " << last_total_loss_ << std::endl;
+    std::cout << "Parameter stats: sum=" << param_sum << ", avg=" << mean << ", count=" << param_count << std::endl;
+    std::cout << "================================" << std::endl;
+
+    // Add this at the end of the Train method, right before printing the final stats
+    std::cout << "\n=== GRADIENT DIAGNOSTICS ===" << std::endl;
+    for (const auto& param_name_pair : network_->named_parameters()) {
+        const auto& name = param_name_pair.key();
+        const auto& param = param_name_pair.value();
+        
+        if (param.grad().defined()) {
+            float grad_norm = param.grad().norm().item<float>();
+            std::cout << "Layer: " << name << ", Grad norm: " << grad_norm << std::endl;
+        } else {
+            std::cout << "Layer: " << name << ", NO GRADIENT DEFINED" << std::endl;
+        }
+    }
+
+    // Use the saved final_policy_preds here instead
+    std::cout << "Policy entropy: " << (-torch::softmax(final_policy_preds, 1) * torch::log_softmax(final_policy_preds, 1)).sum(1).mean().item<float>() << std::endl;
 }
 
 }  // namespace alphazero 

@@ -36,39 +36,28 @@ EvaluationStats Evaluator::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork>
     opponent->to(torch::kCPU);
     opponent->eval();
     
-{
-        // Debug main network parameters
-        float main_param_sum = 0.0f;
-        int main_param_count = 0;
-        for (const auto& param : network_->parameters()) {
-            auto data = param.data_ptr<float>();
-            for (int64_t i = 0; i < param.numel(); ++i) {
-                main_param_sum += std::abs(data[i]);
-                main_param_count++;
-            }
-        }
-        
-        // Debug opponent network parameters
-        float opp_param_sum = 0.0f;
-        int opp_param_count = 0;
-        for (const auto& param : opponent->parameters()) {
-            auto data = param.data_ptr<float>();
-            for (int64_t i = 0; i < param.numel(); ++i) {
-                opp_param_sum += std::abs(data[i]);
-                opp_param_count++;
-            }
-        }
-        
-        /*
-        std::cout << "\n=== EVALUATION NETWORKS COMPARISON ===" << std::endl;
-        std::cout << "Main network: sum=" << main_param_sum 
-                  << ", avg=" << (main_param_sum / main_param_count) << std::endl;
-        std::cout << "Opponent network: sum=" << opp_param_sum 
-                  << ", avg=" << (opp_param_sum / opp_param_count) << std::endl;
-        std::cout << "Different?: " << (std::abs(main_param_sum - opp_param_sum) > 1e-6 ? "YES" : "NO") << std::endl;
-        std::cout << "=====================================\n" << std::endl;
-        */
+    // Calculate parameter statistics for both networks
+    float main_param_sum = 0.0f;
+    int main_param_count = 0;
+    for (const auto& param : network_->parameters()) {
+        auto flat_param = param.flatten();
+        main_param_count += param.numel();
+        main_param_sum += flat_param.abs().sum().item<float>();
     }
+    float main_avg = main_param_sum / main_param_count;
+    std::cout << "Best network - Parameter stats: sum=" << main_param_sum 
+              << ", avg=" << main_avg << ", count=" << main_param_count << std::endl;
+
+    float opponent_param_sum = 0.0f;
+    int opponent_param_count = 0;
+    for (const auto& param : opponent->parameters()) {
+        auto flat_param = param.flatten();
+        opponent_param_count += param.numel();
+        opponent_param_sum += flat_param.abs().sum().item<float>();
+    }
+    float opponent_avg = opponent_param_sum / opponent_param_count;
+    std::cout << "Opponent network - Parameter stats: sum=" << opponent_param_sum 
+              << ", avg=" << opponent_avg << ", count=" << opponent_param_count << std::endl;
 
     if (IsIdenticalNetwork(network_, opponent)) {
         throw std::runtime_error("Evaluator: Cannot evaluate a network against an identical network!");

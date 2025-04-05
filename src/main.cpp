@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
         auto network = network_manager.CreateInitialNetwork();
         network_manager.SetBestNetwork(network);
     }
-    return 0;
+
     alphazero::MCTSStats aggregated_stats;
 
     for (int iter = 0; iter < config.num_iterations; ++iter) {
@@ -83,6 +83,21 @@ int main(int argc, char** argv) {
         // Save the result of acceptance/rejection
         bool network_accepted = network_manager.AcceptOrRejectNewNetwork(network_to_train, evaluation_stats);
         std::cout << "Network acceptance decision: " << (network_accepted ? "ACCEPTED" : "REJECTED") << std::endl;
+
+        // If network was accepted, evaluate against random player
+        if (network_accepted) {
+            std::cout << "\nEvaluating accepted network against random player..." << std::endl;
+            alphazero::EvaluationStats random_stats = evaluator.EvaluateAgainstRandom();
+            
+            std::cout << "Performance against random player:" << std::endl;
+            std::cout << "  Win rate: " << (random_stats.win_rate * 100) << "%" << std::endl;
+            std::cout << "  Draw rate: " << (random_stats.draw_rate * 100) << "%" << std::endl;
+            std::cout << "  Loss rate: " << (random_stats.loss_rate * 100) << "%" << std::endl;
+        }
+
+        if (network_accepted) {
+            network_manager.SetBestNetwork(network_to_train);
+        }
         network_manager.UpdateTemperature();
     }
     
@@ -93,14 +108,22 @@ int main(int argc, char** argv) {
     
     // Final evaluation
     alphazero::Evaluator final_evaluator(network_manager.GetBestNetwork(), config);
-    alphazero::EvaluationStats final_win_rate_best = final_evaluator.EvaluateAgainstNetwork(network_manager.GetBestNetwork());
+    
+    // This doesn't make sense - we're evaluating the network against itself
+    // Let's remove this redundant evaluation
+    // alphazero::EvaluationStats final_win_rate_best = final_evaluator.EvaluateAgainstNetwork(network_manager.GetBestNetwork());
+    
     alphazero::EvaluationStats final_win_rate_random = final_evaluator.EvaluateAgainstRandom();
     
-    if (auto result = logger.LogFormat("Final Evaluation Results:\n  Win rate vs best: {}%\n  Win rate vs random: {}%",
-        final_win_rate_best.WinStats(), final_win_rate_random.WinStats()); !result) {
+    if (auto result = logger.LogFormat("Final Evaluation Results:\n  Win rate vs random: {}%",
+        final_win_rate_random.WinStats()); !result) {
         std::cerr << "Failed to log final results" << std::endl;
     }
     
-    aggregated_stats.LogStatistics();
+    // Handle the return value of LogStatistics() since it's marked with [[nodiscard]]
+    if (auto result = aggregated_stats.LogStatistics(); !result) {
+        std::cerr << "Failed to log MCTS statistics" << std::endl;
+    }
+    
     return 0;
 } 

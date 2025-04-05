@@ -81,23 +81,35 @@ std::shared_ptr<NeuralNetwork> NetworkManager::CreateInitialNetwork() {
 }
 
 bool NetworkManager::LoadBestNetwork() {
-    std::string best_model_path = config_.model_path + ".best";
-    std::ifstream best_model_file(best_model_path);
-    
-    if (!best_model_file.good()) {
-        std::cout << "No existing best model found. Starting with fresh network." << std::endl;
-        return false;
-    }
-    
     try {
+        // Check if the model file exists
+        std::ifstream file_check(config_.model_path);
+        if (!file_check.good()) {
+            std::cout << "Model file not found at: " << config_.model_path << std::endl;
+            return false;
+        }
+        file_check.close();
+        
+        // Create a new network instance
+        auto network = std::make_shared<NeuralNetwork>(
+            config_.action_size,
+            config_.num_filters,
+            config_.num_residual_blocks,
+            config_.dropout_rate
+        );
+        
+        // Load the model from disk
         torch::serialize::InputArchive archive;
-        archive.load_from(best_model_path);
-        best_network_->load(archive);
-        std::cout << "Loaded best model from: " << best_model_path << std::endl;
+        archive.load_from(config_.model_path);
+        network->load(archive);  // Load into the new network, not best_network_
+        
+        // Set as best network AFTER loading
+        best_network_ = network;
+        
+        std::cout << "Successfully loaded model from: " << config_.model_path << std::endl;
         return true;
     } catch (const std::exception& e) {
-        std::cerr << "Error loading best model: " << e.what() << std::endl;
-        std::cerr << "Starting with fresh network" << std::endl;
+        std::cerr << "Error loading model: " << e.what() << std::endl;
         return false;
     }
 }

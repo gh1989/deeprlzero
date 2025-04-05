@@ -36,12 +36,11 @@ void TestNeuralNetworkClone() {
   bool passed = true;
 
   // Create an original instance of the mock neural network.
-  std::unique_ptr<NeuralNetwork> original =
-      std::make_unique<NeuralNetwork>();
+  Config config;
+  auto original = std::make_unique<NeuralNetwork>(config);
 
   // Clone the network.
-  std::shared_ptr<NeuralNetwork> cloned =
-      std::dynamic_pointer_cast<NeuralNetwork>(original->clone());
+  auto cloned = std::dynamic_pointer_cast<NeuralNetwork>(original->clone());
 
   // Ensure that the cloned pointer is different from the original.
   if (original.get() == cloned.get()) {
@@ -93,8 +92,8 @@ void TestForwardPassDifferentPlayers() {
   bool passed = true;
 
   // Create an original instance of the mock neural network.
-  std::unique_ptr<NeuralNetwork> network =
-      std::make_unique<NeuralNetwork>();
+  Config config;
+  auto network = std::make_unique<NeuralNetwork>(config);
 
   auto game = std::make_unique<TicTacToe>();
   game->MakeMove(4);
@@ -117,8 +116,8 @@ void TestComputePolicyLoss() {
   bool passed = true;
   
   // Create a Trainer instance.
-  auto network = std::make_shared<NeuralNetwork>();
   Config config = TestConfig();
+  auto network = std::make_shared<NeuralNetwork>(config);
   Trainer trainer(network, config);
   
   // --- Test 1 ---
@@ -150,8 +149,8 @@ void TestComputePolicyLoss() {
 // Test case for computing value loss.
 void TestComputeValueLoss() {
   bool passed = true;
-  auto network = std::make_shared<NeuralNetwork>();
   Config config = TestConfig();
+  auto network = std::make_shared<NeuralNetwork>(config);
   Trainer trainer(network, config);
   
   // --- Test 1 ---
@@ -186,6 +185,7 @@ void CheckNetworkUpdates() {
   
   // Create a simple NeuralNetwork instance.
   // Here, we use arbitrary parameters (input channels=1, filters=16, num_actions=9, residual blocks=1)
+  Config config;
   auto network = std::make_shared<NeuralNetwork>(1, 16, 9, 1);
   
   // Create an Adam optimizer for the network.
@@ -203,7 +203,6 @@ void CheckNetworkUpdates() {
   auto value_target = torch::tensor({1.0f}, torch::kFloat);
   
   // Create a Trainer instance.
-  Config config = TestConfig();
   Trainer trainer(network, config);
   
   // Compute network predictions.

@@ -48,7 +48,7 @@ int main() {
     
     // Create config with small network for testing
     Config config;
-    config.board_size = 3;
+
     config.action_size = 9;
     config.num_residual_blocks = 1;
     config.num_filters = 32;

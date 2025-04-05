@@ -9,19 +9,19 @@ namespace alphazero {
 class Config {
  public:
   // Network configuration
-  int num_filters = 32;
-  int num_residual_blocks = 3;
+  int num_filters = 16;
+  int num_residual_blocks = 1;
   float learning_rate = 1e-3;
   float prior_alpha = 0.75f;
   
   // Temperature annealing
   float initial_temperature = 1.5f;
   float min_temperature = 0.1f;
-  float temperature_decay = 1.00f;
+  float temperature_decay = 0.99f;
   
   // MCTS configuration
-  int num_simulations = 16;
-  float c_puct = 3.0;
+  int num_simulations = 64;
+  float c_puct = std::sqrt(2);
   float temperature = 1.5;
   int action_size = 9;       // Total number of possible actions
   int mcts_batch_size = 64; 
@@ -30,13 +30,13 @@ class Config {
     
   // Training configuration
   int training_batch_size = 2048;  
-  int num_epochs = 100;
+  int num_epochs = 40;
   int num_iterations = 25;
-  int episodes_per_iteration = 25;
+  int episodes_per_iteration = 128;
     
   // Evaluation configuration
-  int num_evaluation_games = 200;
-  float acceptance_threshold = 0.52f;
+  int num_evaluation_games = 32;
+  float acceptance_threshold = 0.55f;
     
   std::string model_path = "alphazero_model.pt";
   std::string log_file_path = "alphazero_log.txt";

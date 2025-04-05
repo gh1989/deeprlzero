@@ -2,7 +2,7 @@
 
 namespace alphazero {
 
-// Simplified constructor - no residual blocks
+// Simplified constructor
 NeuralNetwork::NeuralNetwork(
     int64_t input_channels,
     int64_t num_filters,
@@ -14,21 +14,24 @@ NeuralNetwork::NeuralNetwork(
     throw std::invalid_argument("Invalid neural network dimensions");
   }
   
+  // Store the board size for convenience (assuming square board)
+  board_size_ = 3 * 3; // 3x3 for Tic-Tac-Toe
+  
   // Initial convolution layer
   conv = register_module("conv", 
       torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels, num_filters, 3).padding(1)));
   
-  // Policy head - just one conv + fc
-  policy_conv = register_module("policy_conv",
-      torch::nn::Conv2d(torch::nn::Conv2dOptions(num_filters, 2, 1)));
-  policy_fc = register_module("policy_fc", 
-      torch::nn::Linear(2 * 3 * 3, num_actions));
+  // Add batch normalization for training stability
+  batch_norm = register_module("batch_norm",
+      torch::nn::BatchNorm2d(num_filters));
   
-  // Value head - just one conv + fc
-  value_conv = register_module("value_conv",
-      torch::nn::Conv2d(torch::nn::Conv2dOptions(num_filters, 1, 1)));
-  value_fc2 = register_module("value_fc2", 
-      torch::nn::Linear(3 * 3, 1));
+  // Policy head - no intermediate convolution, just flatten and linear
+  policy_fc = register_module("policy_fc", 
+      torch::nn::Linear(num_filters * board_size_, num_actions));
+  
+  // Value head - no intermediate convolution, just flatten and linear
+  value_fc = register_module("value_fc", 
+      torch::nn::Linear(num_filters * board_size_, 1));
   
   // Initialize weights
   InitializeWeights();
@@ -45,39 +48,65 @@ std::pair<torch::Tensor, torch::Tensor> NeuralNetwork::forward(torch::Tensor x) 
 }
 
 std::pair<torch::Tensor, torch::Tensor> NeuralNetwork::forward_impl(torch::Tensor x) {
-  //std::lock_guard<std::mutex> lock(*forward_mutex_);
+  // First, let's print some diagnostic info
+  //std::cout << "Input shape: " << x.sizes() << " Mean: " << x.mean().item<float>() << std::endl;
+  //std::cout << "Input has non-zero values: " << (x.abs().sum().item<float>() > 0) << std::endl;
   
-  // Initial convolution
-  x = torch::relu(conv(x));
+  // Apply convolutional layer
+  x = conv(x);
+  //std::cout << "After conv: " << x.sizes() << " Mean: " << x.mean().item<float>() << std::endl;
+  
+  // Apply batch norm and activation separately to check each step
+  x = batch_norm(x);
+  //std::cout << "After batch_norm: " << x.sizes() << " Mean: " << x.mean().item<float>() << std::endl;
+  
+  x = torch::relu(x);
+  //std::cout << "After relu: " << x.sizes() << " Mean: " << x.mean().item<float>() << std::endl;
+  
+  // Store original shape for reshaping later
+  auto batch_size = x.size(0);
+  
+  // Flatten the tensor for the fully connected layers - CAREFUL WITH THIS STEP!
+  //std::cout << "Before flatten shape: " << x.sizes() << std::endl;
+  x = x.reshape({batch_size, -1});
+  //std::cout << "After flatten shape: " << x.sizes() << std::endl;
   
   // Policy head
-  auto p = torch::relu(policy_conv(x));
-  p = p.view({p.size(0), -1});  // Flatten
-  auto policy = torch::log_softmax(policy_fc(p), 1);
+  auto policy_logits = policy_fc(x);
+  //std::cout << "Policy logits: " << policy_logits.sizes() << " Mean: " << policy_logits.mean().item<float>() << std::endl;
   
   // Value head
-  auto v = torch::relu(value_conv(x));
-  v = v.view({v.size(0), -1});  // Flatten
-  auto value = torch::tanh(value_fc2(v));
+  auto value = torch::tanh(value_fc(x));
+  //std::cout << "Value: " << value.sizes() << " Mean: " << value.mean().item<float>() << std::endl;
   
-  // Cache results
-  cached_policy_ = policy;
+  // Store for caching WITHOUT breaking graph
+  cached_policy_ = policy_logits;
   cached_value_ = value;
   
-  return {policy, value};
+  return std::make_pair(policy_logits, value);
 }
 
+
 void NeuralNetwork::InitializeWeights() {
-  // Use larger initialization to help gradient flow
+  // Use He initialization for ReLU networks
   for (auto& p : parameters()) {
     if (p.dim() > 1) {
-      // Use xavier_normal_ with higher gain for better gradient flow
-      torch::nn::init::xavier_normal_(p, 1.5);
+      // Use kaiming_normal_ initialization which is better for ReLU
+      torch::nn::init::kaiming_normal_(p);
     } else if (p.dim() == 1) {
-      // Use small positive bias to avoid dead neurons
-      torch::nn::init::constant_(p, 0.1);
+      // Use small positive bias for ReLU activation
+      if (p.size(0) == batch_norm->options.num_features()) {
+        // For batch norm biases, use small positive values
+        torch::nn::init::constant_(p, 0.1); 
+      } else {
+        // For other biases
+        torch::nn::init::zeros_(p);
+      }
     }
   }
+  
+  // Explicitly set batch norm to training mode
+  batch_norm->train();
 }
 
 void NeuralNetwork::MoveToDevice(const torch::Device& device) {
@@ -85,83 +114,49 @@ void NeuralNetwork::MoveToDevice(const torch::Device& device) {
 }
 
 void NeuralNetwork::reset() {
-  // Simply recreate our minimal network
-  const int board_size = 3 * 3;
-  
+  // Get dimensions from existing layers
   int64_t input_channels = 1; // Default
   int64_t num_actions = 9;    // Default for 3x3 board
-  int64_t num_filters = 32;
+  int64_t num_filters = 32;   // Default
 
   // If existing layers exist, get their dimensions
-  if (policy_fc) {
-    num_actions = policy_fc->options.out_features();
-    input_channels = policy_fc->options.in_features() / board_size;
+  if (conv) {
+    input_channels = conv->options.in_channels();
+    num_filters = conv->options.out_channels();
   }
   
- if (conv) {
-    num_filters = conv->options.out_channels();
- }
+  if (policy_fc) {
+    num_actions = policy_fc->options.out_features();
+  }
 
   // Initial convolution layer
   conv = register_module("conv", 
       torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels, num_filters, 3).padding(1)));
   
-  policy_conv = register_module("policy_conv",
-      torch::nn::Conv2d(torch::nn::Conv2dOptions(num_filters, 2, 1)));
-
-  value_conv = register_module("value_conv",
-      torch::nn::Conv2d(torch::nn::Conv2dOptions(num_filters, 1, 1)));
-
-  policy_fc = register_module("policy_fc", 
-      torch::nn::Linear(input_channels * board_size, num_actions));
+  // Add batch normalization
+  batch_norm = register_module("batch_norm",
+      torch::nn::BatchNorm2d(num_filters));
   
-  value_fc2 = register_module("value_fc2", 
-      torch::nn::Linear(input_channels * board_size, 1));
+  // Policy head - direct from features to action logits
+  policy_fc = register_module("policy_fc", 
+      torch::nn::Linear(num_filters * board_size_, num_actions));
+  
+  // Value head - direct from features to value
+  value_fc = register_module("value_fc", 
+      torch::nn::Linear(num_filters * board_size_, 1));
   
   // Initialize weights
   InitializeWeights();
 }
 
-/*
-void NeuralNetwork::save(const std::string& path) {
-  torch::save(std::enable_shared_from_this<NeuralNetwork>::shared_from_this(), path);
-}
-
-void NeuralNetwork::load(const std::string& path) {
-  torch::load(std::enable_shared_from_this<NeuralNetwork>::shared_from_this(), path);
-}
-
-std::shared_ptr<NeuralNetwork> NeuralNetwork::Clone(torch::Device device) const {
-  auto cloned = std::make_shared<NeuralNetwork>(
-    conv->options.in_channels(),
-    conv->options.out_channels(),
-    policy_fc->options.out_features()
-  );
-  
-  // Copy all parameters
-  for (auto& item : named_parameters()) {
-    auto name = item.key();
-    auto param = item.value();
+std::shared_ptr<torch::nn::Module> NeuralNetwork::clone(const torch::optional<torch::Device>& device) const {
+    auto cloned = torch::nn::Cloneable<NeuralNetwork>::clone(device);
+    auto typed_clone = std::dynamic_pointer_cast<NeuralNetwork>(cloned);
     
-    if (cloned->named_parameters().contains(name)) {
-      cloned->named_parameters()[name].copy_(param);
-    }
-  }
-  
-  // Copy all buffers (running means/vars for batch norm)
-  for (auto& item : named_buffers()) {
-    auto name = item.key();
-    auto buffer = item.value();
+    // Set up a new mutex for the clone
+    typed_clone->forward_mutex_ = std::make_shared<std::mutex>();
     
-    if (cloned->named_buffers().contains(name)) {
-      cloned->named_buffers()[name].copy_(buffer);
-    }
+    return cloned;
   }
-  
-  // Move to specified device
-  cloned->to(device);
-  
-  return cloned;
-}
-*/
+
 }  // namespace alphazero 
