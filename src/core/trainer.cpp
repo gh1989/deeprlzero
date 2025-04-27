@@ -5,18 +5,9 @@
 
 #include "core/mcts.h"
 #include "core/trainer.h"
+#include "core/logger.h"
 
 namespace deeprlzero {
-
-torch::Tensor Trainer::ComputePolicyLoss(const torch::Tensor& policy_preds,
-                                         const torch::Tensor& policy_targets) {
-  return torch::nn::functional::cross_entropy(policy_preds, policy_targets);
-}
-
-torch::Tensor Trainer::ComputeValueLoss(const torch::Tensor& value_preds,
-                                        const torch::Tensor& value_targets) {
-  return torch::mse_loss(value_preds, value_targets);
-}
 
 void Trainer::Train(const std::vector<GameEpisode>& episodes) {
   if (episodes.empty()) {
@@ -71,11 +62,33 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
   }
 }
 
-Evaluator::Evaluator(std::shared_ptr<NeuralNetwork> network,
-                     const Config& config)
-    : network_(network), config_(config) {}
+float Trainer::UpdateTemperature(float current_temperature) {
+    current_temperature = std::max(
+        config_.min_temperature, 
+        current_temperature * config_.temperature_decay
+    );
+    return current_temperature;
+};
 
-bool Evaluator::IsIdenticalNetwork(std::shared_ptr<NeuralNetwork> network1,
+bool Trainer::AcceptOrRejectNewNetwork(
+    std::shared_ptr<NeuralNetwork> candidate_network,
+    const EvaluationStats& stats
+) {
+    float win_loss_ratio = (stats.win_rate + 0.5f * stats.draw_rate) / 
+                          (stats.loss_rate + 0.5f * stats.draw_rate);
+                          
+    if (win_loss_ratio >= config_ .acceptance_threshold) {
+        network_ = candidate_network;
+        NeuralNetwork::SaveBestNetwork(network_, config_);
+        iterations_since_improvement_= 0;
+        return true;
+    } else {
+        iterations_since_improvement_++;
+        return false;
+    }
+}
+
+bool Trainer::IsIdenticalNetwork(std::shared_ptr<NeuralNetwork> network1,
                                    std::shared_ptr<NeuralNetwork> network2) {
   // Check if networks are identical by comparing their parameters
   bool networks_identical = true;
@@ -95,8 +108,7 @@ bool Evaluator::IsIdenticalNetwork(std::shared_ptr<NeuralNetwork> network1,
   return networks_identical;
 }
 
-EvaluationStats Evaluator::EvaluateAgainstNetwork(
-    std::shared_ptr<NeuralNetwork> opponent) {
+EvaluationStats Trainer::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> opponent) {
   network_->to(torch::kCPU);
   network_->eval();
   opponent->to(torch::kCPU);
@@ -187,7 +199,7 @@ EvaluationStats Evaluator::EvaluateAgainstNetwork(
   return stats;
 }
 
-EvaluationStats Evaluator::EvaluateAgainstRandom() {
+EvaluationStats Trainer::EvaluateAgainstRandom() {
   int wins = 0;
   int draws = 0;
   int losses = 0;
@@ -237,69 +249,21 @@ EvaluationStats Evaluator::EvaluateAgainstRandom() {
   stats.win_rate = static_cast<float>(wins) / total_games;
   stats.draw_rate = static_cast<float>(draws) / total_games;
   stats.loss_rate = static_cast<float>(losses) / total_games;
+        
+  Logger &logger = Logger::GetInstance(config_);          
+  auto log_string = logger.LogFormat("Performance vs Random: Win: {:.1f}%, Draw: {:.1f}%, Loss: {:.1f}%",
+      stats.win_rate * 100,
+      stats.draw_rate * 100,
+      stats.loss_rate * 100);
   return stats;
 }
 
-static void GenerateAllEpisodesHelper(std::unique_ptr<TicTacToe> game,
-                                      std::vector<torch::Tensor>& boards,
-                                      std::vector<std::vector<float>>& policies,
-                                      std::vector<float>& values,
-                                      std::vector<int>& players,
-                                      std::vector<GameEpisode>& episodes) {
-  // If the game is over, record the episode.
-  if (game->IsTerminal()) {
-    float final_result = game->GetGameResult();
-    GameEpisode episode;
-    episode.boards = boards;
-    episode.policies = policies;
-    // Set the values directly in the provided vector
-    values.resize(players.size());
-    for (size_t i = 0; i < players.size(); ++i) {
-      values[i] = (players[i] == 1) ? final_result : -final_result;
-    }
-    episode.outcome = final_result;
-    episodes.push_back(episode);
-    return;
-  }
-
-  std::vector<int> valid_moves = game->GetValidMoves();
-  for (int move : valid_moves) {
-    std::unique_ptr<Game> game_clone = game->Clone();
-    TicTacToe* ttt_ptr = static_cast<TicTacToe*>(game_clone.release());
-    std::unique_ptr<TicTacToe> new_game(ttt_ptr);
-    new_game->MakeMove(move);
-    new_game->MakeMove(move);
-    torch::Tensor board_tensor = new_game->GetCanonicalBoard();
-    boards.push_back(board_tensor);
-    int action_size = new_game->GetActionSize();
-    std::vector<float> uniform_policy(action_size, 1.0f / action_size);
-    policies.push_back(uniform_policy);
-    values.push_back(0.0f);
-    int move_player = -new_game->GetCurrentPlayer();
-    players.push_back(move_player);
-
-    GenerateAllEpisodesHelper(std::move(new_game), boards, policies, values,
-                              players, episodes);
-
-    boards.pop_back();
-    policies.pop_back();
-    values.pop_back();
-    players.pop_back();
-  }
+torch::Tensor Trainer::ComputePolicyLoss(const torch::Tensor& policy_preds, const torch::Tensor& policy_targets) {
+  return torch::nn::functional::cross_entropy(policy_preds, policy_targets);
 }
 
-std::vector<GameEpisode> AllEpisodes() {
-  std::vector<GameEpisode> episodes;
-  std::vector<torch::Tensor> boards;
-  std::vector<std::vector<float>> policies;
-  std::vector<float> values;
-  std::vector<int> players;
-
-  auto game = std::make_unique<TicTacToe>();
-
-  GenerateAllEpisodesHelper(std::move(game), boards, policies, values, players,
-                            episodes);
-  return episodes;
+torch::Tensor Trainer::ComputeValueLoss(const torch::Tensor& value_preds, const torch::Tensor& value_targets) {
+  return torch::mse_loss(value_preds, value_targets);
 }
 
 } 

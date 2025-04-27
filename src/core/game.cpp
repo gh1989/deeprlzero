@@ -7,6 +7,7 @@
 
 namespace deeprlzero {
 
+/*
 std::vector<int> Game::GetValidMoves() const { return std::vector<int>(); }
 void Game::MakeMove(int move) {}
 float Game::GetGameResult() const { return 0.0f; }
@@ -15,6 +16,7 @@ int Game::GetActionSize() const { return 0; }
 int Game::GetInputChannels() const { return 0; }
 void Game::UndoMove(int move) {}
 void Game::Reset() {}
+*/
 
 TicTacToe::TicTacToe() : current_player_(1) {
   for (auto& row : board_) {

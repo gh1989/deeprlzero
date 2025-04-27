@@ -4,6 +4,7 @@
 #include <deque>
 #include <format>
 #include <iostream>
+#include <filesystem>
 #include <memory>
 #include <numeric>
 #include <vector>
@@ -11,8 +12,27 @@
 
 #include "core/game.h"
 #include "core/network.h"
+#include "core/logger.h"
 
 namespace deeprlzero {
+
+/// hold detailed evaluation outcomes.
+struct EvaluationStats {
+  float win_rate;
+  float draw_rate;
+  float loss_rate;
+
+  std::string WinStats() const {
+    return std::format("Win rate: {}%, Draw rate: {}%, Loss rate: {}%",
+                       win_rate * 100, draw_rate * 100, loss_rate * 100);
+  }
+
+  bool IsBetterThan(const EvaluationStats& other) const {
+    float score = win_rate + draw_rate * 0.5;
+    float other_score = other.win_rate + other.draw_rate * 0.5;
+    return score > other_score;
+  }
+};
 
 class Trainer {
  public:
@@ -37,11 +57,25 @@ class Trainer {
                                  const torch::Tensor& value_targets);
   void Train(const std::vector<GameEpisode>& examples);
 
+  int IterationsSinceImprovement() const { return iterations_since_improvement_; }
+
   // Add getters for training metrics
   float GetPolicyLoss() const { return last_policy_loss_; }
   float GetValueLoss() const { return last_value_loss_; }
   float GetTotalLoss() const { return last_total_loss_; }
   float GetParameterVariance() const { return last_param_variance_; }
+  
+  float UpdateTemperature(float current_temperature);
+  bool AcceptOrRejectNewNetwork( std::shared_ptr<NeuralNetwork> candidate_network, const EvaluationStats& stats );
+
+  static std::shared_ptr<NeuralNetwork> CreateInitialNetwork(const Config& config);
+  static std::shared_ptr<NeuralNetwork> LoadBestNetwork(const Config& config);
+  
+  EvaluationStats EvaluateAgainstRandom();
+  EvaluationStats EvaluateNetworks(std::shared_ptr<NeuralNetwork> network1,
+                                  std::shared_ptr<NeuralNetwork> network2,
+                                  int num_games = 100);
+  EvaluationStats EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> opponent);
 
  private:
   const Config& config_;
@@ -53,47 +87,10 @@ class Trainer {
   float last_value_loss_ = 0.0f;
   float last_total_loss_ = 0.0f;
   float last_param_variance_ = 0.0f;
-};
-
-// New structure to hold detailed evaluation outcomes.
-struct EvaluationStats {
-  float win_rate;
-  float draw_rate;
-  float loss_rate;
-
-  std::string WinStats() const {
-    return std::format("Win rate: {}%, Draw rate: {}%, Loss rate: {}%",
-                       win_rate * 100, draw_rate * 100, loss_rate * 100);
-  }
-
-  bool IsBetterThan(const EvaluationStats& other) const {
-    float score = win_rate + draw_rate * 0.5;
-    float other_score = other.win_rate + other.draw_rate * 0.5;
-    return score > other_score;
-  }
-};
-
-class Evaluator {
- public:
-  Evaluator(std::shared_ptr<NeuralNetwork> network, const Config& config);
-
-  // Play against random player
-  EvaluationStats EvaluateAgainstRandom();
-
-  // Play two networks against each other
-  EvaluationStats EvaluateNetworks(std::shared_ptr<NeuralNetwork> network1,
-                                   std::shared_ptr<NeuralNetwork> network2,
-                                   int num_games = 100);
-
-  EvaluationStats EvaluateAgainstNetwork(
-      std::shared_ptr<NeuralNetwork> opponent);
-
- private:
+  int iterations_since_improvement_ = 0;
   bool IsIdenticalNetwork(std::shared_ptr<NeuralNetwork> network1,
                           std::shared_ptr<NeuralNetwork> network2);
-  static constexpr int kNumEvaluationGames = 100;  // Fixed constant
-  std::shared_ptr<NeuralNetwork> network_;
-  const Config& config_;
+  static constexpr int kNumEvaluationGames = 100;
 };
 
 }  

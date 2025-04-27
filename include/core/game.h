@@ -104,14 +104,25 @@ GameEpisode ExecuteEpisode();
   std::mt19937 rng_{std::random_device{}()};  
 };
 
-static void GenerateAllEpisodesHelper(std::unique_ptr<TicTacToe> game,
-                                      std::vector<torch::Tensor>& boards,
-                                      std::vector<std::vector<float>>& policies,
-                                      std::vector<float>& values,
-                                      std::vector<int>& players,
-                                      std::vector<GameEpisode>& episodes);
-
 std::vector<GameEpisode> AllEpisodes();
+
+inline float CalculateAverageExplorationMetric(const std::vector<GameEpisode>& episodes) {
+  if (episodes.empty()) {
+    return 0.0f;
+  }
+  
+  float total_entropy = 0.0f;
+  int total_moves = 0;
+  
+  for (const auto& episode : episodes) {
+    for (const auto& policy : episode.policies) {
+      total_entropy += NeuralNetwork::CalculatePolicyEntropy(policy);
+      total_moves++;
+    }
+  }
+  
+  return total_moves > 0 ? total_entropy / total_moves : 0.0f;
+}
 
 }
 
