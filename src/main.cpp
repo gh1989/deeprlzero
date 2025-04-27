@@ -52,21 +52,17 @@ int main(int argc, char** argv) {
 
       /// was the self play good?
       float exploration_metric = CalculateAverageExplorationMetric(episodes);
-      logger.LogFormat("Exploration metric: {:.4f}", exploration_metric);
-
       /// train - then accept/reject
       trainer.Train(episodes);
-      EvaluationStats evaluation_stats = trainer.EvaluateAgainstNetwork(network_to_train);
-      bool network_accepted = trainer.AcceptOrRejectNewNetwork(network_to_train, evaluation_stats);   
-      logger.LogFormat("Network acceptance decision: {}", network_accepted ? "ACCEPTED" : "REJECTED");
-      trainer.UpdateTemperature(current_temperature);
-      logger.LogFormat("Temperature updated to: {:.4f}", current_temperature);
+      EvaluationStats evaluation_stats = trainer.EvaluateAgainstNetwork(best_network);
+      bool network_accepted = trainer.AcceptOrRejectNewNetwork(best_network, evaluation_stats);
+
+      ///there's no temperature update in the trainer.
+      ///trainer.UpdateTemperature(current_temperature);
 
       /// every 5 iterations evaluation against random and 
       /// log the results
-      if (iter % 5 == 0) {
-        trainer.EvaluateAgainstRandom();
-      }
+      trainer.EvaluateAgainstRandom();
   }
   
   logger.Log("Training complete!");

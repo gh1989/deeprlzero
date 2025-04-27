@@ -20,7 +20,7 @@ class Logger {
     return instance;
   }
 
-  [[nodiscard]] std::expected<void, Error> Log(
+  std::expected<void, Error> Log(
       std::string_view message,
       const std::source_location location = std::source_location::current()) {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -44,7 +44,7 @@ class Logger {
   }
 
   template <typename... Args>
-  [[nodiscard]] std::expected<void, Error> LogFormat(
+  std::expected<void, Error> LogFormat(
       std::format_string<Args...> fmt, Args&&... args) {
     try {
       auto formatted = std::format(fmt, std::forward<Args>(args)...);

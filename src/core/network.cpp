@@ -26,6 +26,7 @@ NeuralNetwork::NeuralNetwork(const Config& config) {
   /// output value which is just a float
   value_fc = register_module("value_fc",  torch::nn::Linear(config.num_filters * board_size, 1));
 
+  config_ = config;
   InitializeWeights();
 }
 
@@ -93,12 +94,23 @@ void NeuralNetwork::reset() {
 
 std::shared_ptr<torch::nn::Module> NeuralNetwork::clone(
     const torch::optional<torch::Device>& device) const {
-  auto cloned = torch::nn::Cloneable<NeuralNetwork>::clone(device);
-  auto typed_clone = std::dynamic_pointer_cast<NeuralNetwork>(cloned);
+  auto cloned_net = std::make_shared<NeuralNetwork>(config_);
+  auto typed_device = device.has_value() ? device.value() : torch::kCPU;
 
-  typed_clone->forward_mutex_ = std::make_shared<std::mutex>();
-
-  return cloned;
+  // Explicitly copy parameters to ensure a deep copy
+  torch::NoGradGuard no_grad;
+  auto new_params = cloned_net->named_parameters();
+  auto this_params = this->named_parameters(true);
+  
+  for (const auto& param : this_params) {
+    auto name = param.key();
+    auto& tensor = param.value();
+    auto new_tensor = new_params[name];
+    new_tensor.copy_(tensor);
+  }
+  
+  cloned_net->to(typed_device);
+  return cloned_net;
 }
 
 std::shared_ptr<NeuralNetwork> NeuralNetwork::CreateInitialNetwork(const Config& config) {
@@ -143,7 +155,7 @@ void NeuralNetwork::ValidateGradientFlow(const torch::Tensor& input,
                           const torch::Tensor& target_value) {
 
   zero_grad();
-
+  Logger &logger = Logger::GetInstance();
   auto [policy_pred, value_pred] = forward(input);
 
   auto policy_loss =
@@ -151,14 +163,14 @@ void NeuralNetwork::ValidateGradientFlow(const torch::Tensor& input,
   auto value_loss = torch::nn::functional::mse_loss(value_pred, target_value);
   auto total_loss = policy_loss + value_loss;
 
-  std::cout << "\n===== LOSS DETAILS =====\n";
-  std::cout << "Policy Loss: " << policy_loss.item<float>() << std::endl;
-  std::cout << "Value Loss: " << value_loss.item<float>() << std::endl;
-  std::cout << "Total Loss: " << total_loss.item<float>() << std::endl;
+  logger.Log("\n===== LOSS DETAILS =====\n");
+  logger.LogFormat("Policy Loss: {:.4f}", policy_loss.item<float>());
+  logger.LogFormat("Value Loss: {:.4f}", value_loss.item<float>());
+  logger.LogFormat("Total Loss: {:.4f}", total_loss.item<float>());
 
   total_loss.backward();
 
-  std::cout << "\n===== GRADIENT FLOW DETAILS =====\n";
+  logger.Log("\n===== GRADIENT FLOW DETAILS =====\n");
   bool all_grads_ok = true;
 
   auto named_parameters = this->named_parameters();
@@ -167,30 +179,28 @@ void NeuralNetwork::ValidateGradientFlow(const torch::Tensor& input,
     const torch::Tensor& param = pair.value();
 
     if (!param.grad().defined()) {
-      std::cout << "Warning: No gradient defined for: " << name << std::endl;
+      logger.LogFormat("Warning: No gradient defined for: {}", name);
       all_grads_ok = false;
     } else {
       float grad_norm = param.grad().abs().sum().item<float>();
       if (grad_norm == 0) {
-        std::cout << "Warning: Zero gradient for: " << name << std::endl;
+        logger.LogFormat("Warning: Zero gradient for: {}", name);
         all_grads_ok = false;
       } else {
-        std::cout << "Parameter: " << name << ", Gradient norm: " << grad_norm
-                  << std::endl;
+        logger.LogFormat("Parameter: {}, Gradient norm: {}", name, grad_norm);
       }
     }
   }
 
   if (all_grads_ok) {
-    std::cout << "\nGradient flow validated successfully." << std::endl;
+    logger.Log("\nGradient flow validated successfully.");
   } else {
-    std::cout << "\nGradient flow issues detected. This may impact training "
-                  "effectiveness."
-              << std::endl;
-    std::cout << "Common causes:\n";
-    std::cout << "1. Loss function not connected to all parameters\n";
-    std::cout << "2. Some layers not contributing to the network output\n";
-    std::cout << "3. Incorrect input or target tensor shapes\n";
+    logger.Log("\nGradient flow issues detected. This may impact training "
+                  "effectiveness.");
+    logger.Log("Common causes:\n");
+    logger.Log("1. Loss function not connected to all parameters\n");
+    logger.Log("2. Some layers not contributing to the network output\n");
+    logger.Log("3. Incorrect input or target tensor shapes\n");
   }
 }
 

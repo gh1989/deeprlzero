@@ -14,9 +14,13 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
     throw std::runtime_error("No episodes to train on");
   }
 
-  auto device = torch::cuda::is_available() ? torch::kCUDA : torch::kCPU;
+  // Save initial parameters for comparison
+  std::vector<torch::Tensor> initial_params;
+  for (const auto& param : network_->parameters()) {
+    initial_params.push_back(param.clone());
+  }
 
-  network_->to(device);
+  network_->to(torch::kCUDA);
   network_->train();
 
   // Prepare training data
@@ -39,10 +43,12 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
     }
   }
 
-  auto states = torch::stack(torch::TensorList(all_boards)).to(device);
+  auto states = torch::stack(torch::TensorList(all_boards)).to(torch::kCUDA);
   auto policies =
-      torch::tensor(all_policies).reshape({-1, config_.action_size}).to(device);
-  auto values = torch::tensor(all_values).reshape({-1, 1}).to(device);
+      torch::tensor(all_policies).reshape({-1, config_.action_size}).to(torch::kCUDA);
+  auto values = torch::tensor(all_values).reshape({-1, 1}).to(torch::kCUDA);
+
+  ///network_->ValidateGradientFlow(states, policies, values);
 
   // Training loop
   for (int epoch = 0; epoch < config_.num_epochs; ++epoch) {
@@ -51,7 +57,7 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
     auto outputs = network_->forward(states);
     auto policy_preds = outputs.first;
     auto value_preds = outputs.second;
-
+    ///network_->ValidateGradientFlow(states, policies, values);
     auto loss_policy = -torch::mean(
         torch::sum(policies * torch::log_softmax(policy_preds, 1), 1));
     auto loss_value = torch::mse_loss(value_preds, values);
@@ -60,20 +66,41 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
     total_loss.backward();
     optimizer_->step();
   }
+
+  // After training loop, check if parameters changed
+  Logger& logger = Logger::GetInstance(config_);
+  bool params_changed = false;
+  float total_diff = 0.0f;
+  
+  for (size_t i = 0; i < network_->parameters().size(); ++i) {
+    auto diff = (network_->parameters()[i] - initial_params[i]).abs().sum().item<float>();
+    total_diff += diff;
+    if (diff > 1e-6) {
+      params_changed = true;
+    }
+  }
+  
+  logger.LogFormat("Parameter changes after training: total_diff={:.6f}, changed={}", 
+                  total_diff, params_changed ? "YES" : "NO");
 }
 
+// Currently does nothing...
 float Trainer::UpdateTemperature(float current_temperature) {
-    current_temperature = std::max(
-        config_.min_temperature, 
-        current_temperature * config_.temperature_decay
-    );
-    return current_temperature;
+  Logger& logger = Logger::GetInstance(config_);
+  current_temperature = std::max(
+      config_.min_temperature, 
+      current_temperature * config_.temperature_decay
+  );
+  logger.LogFormat("Temperature updated to: {:.4f}", current_temperature);
+  return current_temperature;
 };
 
 bool Trainer::AcceptOrRejectNewNetwork(
     std::shared_ptr<NeuralNetwork> candidate_network,
     const EvaluationStats& stats
 ) {
+    Logger& logger = Logger::GetInstance(config_);
+    bool network_accepted = false;
     float win_loss_ratio = (stats.win_rate + 0.5f * stats.draw_rate) / 
                           (stats.loss_rate + 0.5f * stats.draw_rate);
                           
@@ -81,11 +108,18 @@ bool Trainer::AcceptOrRejectNewNetwork(
         network_ = candidate_network;
         NeuralNetwork::SaveBestNetwork(network_, config_);
         iterations_since_improvement_= 0;
-        return true;
+        network_accepted = true;
     } else {
         iterations_since_improvement_++;
-        return false;
+        network_accepted = false;
     }
+
+    logger.LogFormat("Network acceptance decision: {}", network_accepted ? "ACCEPTED" : "REJECTED");
+    logger.LogFormat("Win rate: {:.1f}%, Draw rate: {:.1f}%, Loss rate: {:.1f}%", 
+                      stats.win_rate * 100, 
+                      stats.draw_rate * 100, 
+                      stats.loss_rate * 100);
+    return network_accepted;
 }
 
 bool Trainer::IsIdenticalNetwork(std::shared_ptr<NeuralNetwork> network1,
@@ -114,6 +148,7 @@ EvaluationStats Trainer::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> o
   opponent->to(torch::kCPU);
   opponent->eval();
 
+  Logger &logger = Logger::GetInstance(config_);
   float main_param_sum = 0.0f;
   int main_param_count = 0;
   for (const auto& param : network_->parameters()) {
@@ -122,9 +157,7 @@ EvaluationStats Trainer::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> o
     main_param_sum += flat_param.abs().sum().item<float>();
   }
   float main_avg = main_param_sum / main_param_count;
-  std::cout << "Best network - Parameter stats: sum=" << main_param_sum
-            << ", avg=" << main_avg << ", count=" << main_param_count
-            << std::endl;
+  logger.LogFormat("OUR TRAINING NETWORK- Parameter stats: sum={:.4f}, avg={:.4f}, count={}", main_param_sum, main_avg, main_param_count);
 
   float opponent_param_sum = 0.0f;
   int opponent_param_count = 0;
@@ -134,9 +167,7 @@ EvaluationStats Trainer::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> o
     opponent_param_sum += flat_param.abs().sum().item<float>();
   }
   float opponent_avg = opponent_param_sum / opponent_param_count;
-  std::cout << "Opponent network - Parameter stats: sum=" << opponent_param_sum
-            << ", avg=" << opponent_avg << ", count=" << opponent_param_count
-            << std::endl;
+  logger.LogFormat("LATEST ACCEPTED BENCHMARK - Parameter stats: sum={:.4f}, avg={:.4f}, count={}", opponent_param_sum, opponent_avg, opponent_param_count);
 
   if (IsIdenticalNetwork(network_, opponent)) {
     throw std::runtime_error(
@@ -182,13 +213,10 @@ EvaluationStats Trainer::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> o
 
     if (perspective_result > 0) {
       losses++;  // Opponent lost
-      std::cout << "L";
     } else if (perspective_result == 0) {
       draws++;
-      std::cout << "D";
     } else {
       wins++;  // Opponent won
-      std::cout << "W";
     }
   }
 

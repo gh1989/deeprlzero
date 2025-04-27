@@ -58,7 +58,7 @@ class Trainer {
   void Train(const std::vector<GameEpisode>& examples);
 
   int IterationsSinceImprovement() const { return iterations_since_improvement_; }
-
+  std::shared_ptr<NeuralNetwork> GetTrainedNetwork() const { return network_; }
   // Add getters for training metrics
   float GetPolicyLoss() const { return last_policy_loss_; }
   float GetValueLoss() const { return last_value_loss_; }

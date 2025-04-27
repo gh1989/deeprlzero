@@ -7,17 +7,6 @@
 
 namespace deeprlzero {
 
-/*
-std::vector<int> Game::GetValidMoves() const { return std::vector<int>(); }
-void Game::MakeMove(int move) {}
-float Game::GetGameResult() const { return 0.0f; }
-bool Game::IsTerminal() const { return false; }
-int Game::GetActionSize() const { return 0; }
-int Game::GetInputChannels() const { return 0; }
-void Game::UndoMove(int move) {}
-void Game::Reset() {}
-*/
-
 TicTacToe::TicTacToe() : current_player_(1) {
   for (auto& row : board_) {
     row.fill(0);
@@ -174,23 +163,35 @@ GameEpisode SelfPlay<GameType>::ExecuteEpisode() {
 template <typename GameType>
 std::vector<GameEpisode> SelfPlay<GameType>::ExecuteEpisodesParallel() {
   std::vector<GameEpisode> episodes;
+  episodes.reserve(config_.episodes_per_iteration);
 
-  const int num_threads = std::thread::hardware_concurrency();
+  // Use configured thread count, with sensible limits
+  const int num_threads = std::min(config_.num_threads, 
+                                  std::max(1, config_.episodes_per_iteration));
+  
+  // Calculate base episodes per thread and remainder
   const int episodes_per_thread = config_.episodes_per_iteration / num_threads;
+  const int remaining_episodes = config_.episodes_per_iteration % num_threads;
 
   std::vector<std::future<std::vector<GameEpisode>>> futures;
 
+  // Start threads with the work distribution
   for (int i = 0; i < num_threads; ++i) {
+    // Give one extra episode to some threads to handle the remainder
+    int thread_episodes = episodes_per_thread + (i < remaining_episodes ? 1 : 0);
+    
     futures.push_back(
-        std::async(std::launch::async, [this, episodes_per_thread]() {
-          std::vector<GameEpisode> thread_episodes;
-          for (int j = 0; j < episodes_per_thread; ++j) {
-            thread_episodes.push_back(ExecuteEpisode());
+        std::async(std::launch::async, [this, thread_episodes]() {
+          std::vector<GameEpisode> thread_episodes_result;
+          thread_episodes_result.reserve(thread_episodes);
+          for (int j = 0; j < thread_episodes; ++j) {
+            thread_episodes_result.push_back(ExecuteEpisode());
           }
-          return thread_episodes;
+          return thread_episodes_result;
         }));
   }
 
+  // Collect results
   for (auto& future : futures) {
     auto thread_episodes = future.get();
     episodes.insert(episodes.end(), thread_episodes.begin(),

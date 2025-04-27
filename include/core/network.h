@@ -43,6 +43,7 @@ class NeuralNetwork : public torch::nn::Cloneable<NeuralNetwork>,
   torch::Tensor cached_policy_;
   torch::Tensor cached_value_;
   std::shared_ptr<std::mutex> forward_mutex_ = std::make_shared<std::mutex>();
+  Config config_;
   int board_size_ = 9;  // tic-tac-toe
 };
 

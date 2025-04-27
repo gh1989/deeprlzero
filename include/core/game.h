@@ -13,7 +13,7 @@
 
 #include "core/config.h"
 #include "core/network.h"
-
+#include "core/logger.h"
 namespace deeprlzero {
 
 class Game {
@@ -120,8 +120,10 @@ inline float CalculateAverageExplorationMetric(const std::vector<GameEpisode>& e
       total_moves++;
     }
   }
-  
-  return total_moves > 0 ? total_entropy / total_moves : 0.0f;
+  Logger& logger = Logger::GetInstance();
+  float exploration_metric = total_entropy / total_moves; 
+  logger.LogFormat("Exploration metric: {:.4f}", exploration_metric);
+  return exploration_metric;
 }
 
 }
