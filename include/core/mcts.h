@@ -1,49 +1,48 @@
 #ifndef MCTS_H
 #define MCTS_H
 
-#include "game.h"
-#include "network.h"
-#include "config.h"
+#include <cmath>
 #include <memory>
 #include <vector>
-#include <cmath>
+
+#include "config.h"
+#include "game.h"
+#include "network.h"
 
 namespace deeprlzero {
 
 struct Node {
-    float value_sum = 0.0f;
-    int visit_count = 0;
-    bool expanded = false;
-    float prior = 0.0f;
-    std::vector<std::unique_ptr<Node>> children;
-    Node* parent = nullptr;
-    int action = -1;
-    int depth = 0;
+  float value_sum = 0.0f;
+  int visit_count = 0;
+  bool expanded = false;
+  float prior = 0.0f;
+  std::vector<std::unique_ptr<Node>> children;
+  Node* parent = nullptr;
+  int action = -1;
+  int depth = 0;
 
-    explicit Node(const Config& config) 
-        : value_sum(0.0f),
-          visit_count(0),
-          expanded(false),
-          prior(0.0f),
-          parent(nullptr),
-          action(-1),
-          depth(0) {
-        children.resize(config.action_size);  // No second argument
-    }
+  explicit Node(const Config& config)
+      : value_sum(0.0f),
+        visit_count(0),
+        expanded(false),
+        prior(0.0f),
+        parent(nullptr),
+        action(-1),
+        depth(0) {
+    children.resize(config.action_size);  // No second argument
+  }
 
-    float GetValue() const {
-        if (visit_count == 0) return 0.0f;
-        return value_sum / visit_count;
-    }
-    
-    bool IsExpanded() const {
-        return expanded;
-    }
+  float GetValue() const {
+    if (visit_count == 0) return 0.0f;
+    return value_sum / visit_count;
+  }
 
-    bool SetExpanded(bool expanded_=true) {
-        expanded = expanded_;
-        return expanded;
-    }
+  bool IsExpanded() const { return expanded; }
+
+  bool SetExpanded(bool expanded_ = true) {
+    expanded = expanded_;
+    return expanded;
+  }
 };
 
 struct SearchStats {
@@ -52,44 +51,44 @@ struct SearchStats {
 };
 
 class MCTS {
-public:
-    MCTS(std::shared_ptr<NeuralNetwork> network, const Config& config);
-    
-    std::vector<float> GetActionProbabilities(const Game* state, float temperature = 1.0f);
-    int SelectMove(const Game* state, float temperature);
+ public:
+  MCTS(std::shared_ptr<NeuralNetwork> network, const Config& config);
 
-    void ResetRoot();
+  std::vector<float> GetActionProbabilities(const Game* state,
+                                            float temperature = 1.0f);
+  int SelectMove(const Game* state, float temperature);
 
-    Node* GetRoot() const { return root_.get(); }
+  void ResetRoot();
 
-    float Backpropagate(Node* node, float value);
-    void Search(const Game* state, Node* node);
-    float FullSearch(const Game* state, Node* node);
+  Node* GetRoot() const { return root_.get(); }
 
-private:
+  float Backpropagate(Node* node, float value);
+  void Search(const Game* state, Node* node);
+  float FullSearch(const Game* state, Node* node);
 
-    std::pair<int, Node*> SelectAction(Node* node, const Game* state);
-    void ExpandNode(Node* node, const Game* state);
+ private:
+  std::pair<int, Node*> SelectAction(Node* node, const Game* state);
+  void ExpandNode(Node* node, const Game* state);
 
-    std::pair<std::vector<float>, float> GetPolicyValue(const Game* state);
-    
-    std::shared_ptr<NeuralNetwork> network_;
-    const Config& config_;
-    std::unique_ptr<Node> root_;
-    
-    // Add this member variable to track the last move
-    int last_move_ = -1;
-        
-    int GetNodeDepth(Node* node) const {
-        int depth = 0;
-        while (node->parent != nullptr) {
-            depth++;
-            node = node->parent;
-        }
-        return depth;
+  std::pair<std::vector<float>, float> GetPolicyValue(const Game* state);
+
+  std::shared_ptr<NeuralNetwork> network_;
+  const Config& config_;
+  std::unique_ptr<Node> root_;
+
+  // Add this member variable to track the last move
+  int last_move_ = -1;
+
+  int GetNodeDepth(Node* node) const {
+    int depth = 0;
+    while (node->parent != nullptr) {
+      depth++;
+      node = node->parent;
     }
+    return depth;
+  }
 };
 
-}
+}  // namespace deeprlzero
 
 #endif
