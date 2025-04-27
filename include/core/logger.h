@@ -25,9 +25,11 @@ class Logger {
       const std::source_location location = std::source_location::current()) {
     std::lock_guard<std::mutex> lock(mutex_);
     try {
+      /*
       auto formatted_message = std::format("[{}:{}] {}", location.file_name(),
                                            location.line(), message);
-
+      */
+      auto formatted_message = std::format("[LOG] {}", message);
       if (log_file_.is_open()) {
         log_file_ << formatted_message << std::endl;
         if (!log_file_) {

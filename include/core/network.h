@@ -9,8 +9,7 @@
 
 namespace deeprlzero {
 
-class NeuralNetwork : public torch::nn::Cloneable<NeuralNetwork>,
-                      public std::enable_shared_from_this<NeuralNetwork> {
+class NeuralNetwork : public torch::nn::Module, public std::enable_shared_from_this<NeuralNetwork> {
  public:
   NeuralNetwork(const Config& config);
 
@@ -21,11 +20,8 @@ class NeuralNetwork : public torch::nn::Cloneable<NeuralNetwork>,
   void InitializeWeights();
   const torch::Tensor& GetCachedPolicy() const { return cached_policy_; }
   const torch::Tensor& GetCachedValue() const { return cached_value_; }
-  std::shared_ptr<torch::nn::Module> clone(
-      const torch::optional<torch::Device>& device =
-          torch::nullopt) const override;
-
-  void reset() override;
+  std::shared_ptr<NeuralNetwork> NetworkClone(const torch::Device& device) const;
+  void reset();
   void ValidateGradientFlow(const torch::Tensor& input,
                             const torch::Tensor& target_policy,
                             const torch::Tensor& target_value); 

@@ -92,24 +92,34 @@ void NeuralNetwork::reset() {
   InitializeWeights();
 }
 
-std::shared_ptr<torch::nn::Module> NeuralNetwork::clone(
-    const torch::optional<torch::Device>& device) const {
+std::shared_ptr<NeuralNetwork> NeuralNetwork::NetworkClone(const torch::Device& device) const {
+  // Create a new network with the same config
   auto cloned_net = std::make_shared<NeuralNetwork>(config_);
-  auto typed_device = device.has_value() ? device.value() : torch::kCPU;
-
-  // Explicitly copy parameters to ensure a deep copy
+  // Ensure the cloned network has the same structure but different parameter memory
   torch::NoGradGuard no_grad;
-  auto new_params = cloned_net->named_parameters();
+  // Get parameters from both networks
   auto this_params = this->named_parameters(true);
+  auto clone_params = cloned_net->named_parameters(true);
   
+  // Deep copy each parameter tensor to the cloned network
   for (const auto& param : this_params) {
-    auto name = param.key();
-    auto& tensor = param.value();
-    auto new_tensor = new_params[name];
-    new_tensor.copy_(tensor);
+    const auto& name = param.key();
+    const auto& tensor = param.value();
+    
+    // Create a new tensor with the same data but different memory
+    auto new_tensor = tensor.clone().detach();
+    
+    // Set the parameter in the cloned network - using at() instead of find()
+    try {
+      clone_params[name].copy_(new_tensor);
+    } catch (const std::exception& e) {
+      throw std::runtime_error("Parameter not found in cloned network: " + name);
+    }
   }
   
-  cloned_net->to(typed_device);
+  // Move to the desired device
+  cloned_net->to(device);
+  
   return cloned_net;
 }
 

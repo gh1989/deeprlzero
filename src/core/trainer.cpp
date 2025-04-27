@@ -101,13 +101,12 @@ bool Trainer::AcceptOrRejectNewNetwork(
 ) {
     Logger& logger = Logger::GetInstance(config_);
     bool network_accepted = false;
-    float win_loss_ratio = (stats.win_rate + 0.5f * stats.draw_rate) / 
-                          (stats.loss_rate + 0.5f * stats.draw_rate);
+    float win_loss_ratio = (stats.win_rate + 0.5f * stats.draw_rate) / (stats.loss_rate + stats.draw_rate + stats.win_rate);
                           
-    if (win_loss_ratio >= config_ .acceptance_threshold) {
-        network_ = candidate_network;
+    if (win_loss_ratio >= config_.acceptance_threshold) {             
+        // Save the network
         NeuralNetwork::SaveBestNetwork(network_, config_);
-        iterations_since_improvement_= 0;
+        iterations_since_improvement_ = 0;
         network_accepted = true;
     } else {
         iterations_since_improvement_++;

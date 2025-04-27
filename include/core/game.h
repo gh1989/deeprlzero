@@ -89,7 +89,7 @@ class SelfPlay {
  public:
    SelfPlay(std::shared_ptr<NeuralNetwork> network, const Config& config, float temperature)
     : config_(config), current_temperature_(temperature) {
-    network_ = std::dynamic_pointer_cast<NeuralNetwork>(network->clone(torch::kCPU));
+    network_ = std::dynamic_pointer_cast<NeuralNetwork>(network->NetworkClone(torch::kCPU));
     network_->to(torch::kCPU);
     network_->eval();
   }
