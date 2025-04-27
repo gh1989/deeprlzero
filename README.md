@@ -12,6 +12,7 @@ Run:
 ```
 
 Options:
+```
 -f, --filters <n> Number of filters (default: 32)
 -r, --residual-blocks <n> Number of residual blocks (default: 3)
 -l, --learning-rate <f> Learning rate (default: 0.001)
@@ -26,3 +27,4 @@ Options:
 -n, --eval-games <n> Number of evaluation games (default: 200)
 -a, --acceptance-threshold <f> Acceptance threshold (default: 0.52)
 -h, --help Print this help message
+```
