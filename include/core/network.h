@@ -114,6 +114,6 @@ class NeuralNetwork : public torch::nn::Cloneable<NeuralNetwork>,
   int board_size_ = 9;  // 3x3 board
 };
 
-}  // namespace deeprlzero
+}  
 
 #endif

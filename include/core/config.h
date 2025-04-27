@@ -130,6 +130,6 @@ class Config {
   }
 };
 
-}  // namespace deeprlzero
+}  
 
 #endif

@@ -202,4 +202,4 @@ template GameEpisode SelfPlay<TicTacToe>::ExecuteEpisode();
 template std::vector<GameEpisode>
 SelfPlay<TicTacToe>::ExecuteEpisodesParallel();
 
-}  // namespace deeprlzero
+}  

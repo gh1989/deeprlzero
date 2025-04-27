@@ -2,7 +2,6 @@
 
 namespace deeprlzero {
 
-// Simplified constructor
 NeuralNetwork::NeuralNetwork(int64_t input_channels, int64_t num_filters,
                              int64_t num_actions, int64_t num_residual_blocks) {
   if (input_channels <= 0 || num_filters <= 0 || num_actions <= 0) {
@@ -73,9 +72,9 @@ void NeuralNetwork::MoveToDevice(const torch::Device& device) {
 }
 
 void NeuralNetwork::reset() {
-  int64_t input_channels = 3;  // Default
-  int64_t num_actions = 9;     // Default for 3x3 board
-  int64_t num_filters = 32;    // Default
+  int64_t input_channels = 3; 
+  int64_t num_actions = 9;     // specific to tic tac toe
+  int64_t num_filters = 32;    
 
   if (conv) {
     input_channels = conv->options.in_channels();
@@ -113,4 +112,4 @@ std::shared_ptr<torch::nn::Module> NeuralNetwork::clone(
   return cloned;
 }
 
-}  // namespace deeprlzero
+} 

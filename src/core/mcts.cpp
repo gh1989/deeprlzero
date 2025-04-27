@@ -31,7 +31,6 @@ std::vector<float> MCTS::GetActionProbabilities(const Game* state,
   for (size_t i = 0; i < root_->children.size(); ++i) {
     if (root_->children[i]) {
       float count = static_cast<float>(root_->children[i]->visit_count);
-      // std::cout << "Node " << i << " count: " << count << std::endl;
       if (temperature == 0.0f) {
         pi[i] = count;
       } else {
@@ -259,4 +258,4 @@ float MCTS::FullSearch(const Game* state, Node* node) {
   return best_value;
 }
 
-}  // namespace deeprlzero
+} 

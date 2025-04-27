@@ -73,6 +73,6 @@ class Logger {
   std::mutex mutex_;
 };
 
-}  // namespace deeprlzero
+}  
 
 #endif

@@ -89,6 +89,6 @@ class MCTS {
   }
 };
 
-}  // namespace deeprlzero
+}  
 
 #endif

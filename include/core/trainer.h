@@ -96,6 +96,6 @@ class Evaluator {
   const Config& config_;
 };
 
-}  // namespace deeprlzero
+}  
 
 #endif

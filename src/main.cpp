@@ -41,7 +41,7 @@ float CalculateAverageExplorationMetric(const std::vector<GameEpisode>& episodes
   return total_moves > 0 ? total_entropy / total_moves : 0.0f;
 }
 
-} // namespace deeprlzero
+} 
 
 int main(int argc, char** argv) {
     auto config = deeprlzero::Config::ParseCommandLine(argc, argv);
