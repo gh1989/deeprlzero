@@ -65,7 +65,8 @@ class MCTS {
   float Backpropagate(Node* node, float value);
   void Search(const Game* state, Node* node);
   float FullSearch(const Game* state, Node* node);
-
+  void AddDirichletNoiseToRoot(const Game* state);
+  
  private:
   std::pair<int, Node*> SelectAction(Node* node, const Game* state);
   void ExpandNode(Node* node, const Game* state);
@@ -87,6 +88,7 @@ class MCTS {
     }
     return depth;
   }
+
 };
 
 }  

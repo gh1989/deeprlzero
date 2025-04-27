@@ -11,9 +11,9 @@
 #include <mutex>
 #include <atomic>
 
-#include "core/config.h"
-#include "core/network.h"
-#include "core/logger.h"
+#include "config.h"
+#include "network.h"
+#include "logger.h"
 namespace deeprlzero {
 
 class Game {

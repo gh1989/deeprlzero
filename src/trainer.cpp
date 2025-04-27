@@ -3,9 +3,9 @@
 #include <random>
 #include <torch/torch.h>
 
-#include "core/mcts.h"
-#include "core/trainer.h"
-#include "core/logger.h"
+#include "mcts.h"
+#include "trainer.h"
+#include "logger.h"
 
 namespace deeprlzero {
 
@@ -84,9 +84,9 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
                   total_diff, params_changed ? "YES" : "NO");
 }
 
-// Currently does nothing...
+
 float Trainer::UpdateTemperature(float current_temperature) {
-  Logger& logger = Logger::GetInstance(config_);
+  Logger& logger = Logger::GetInstance();
   current_temperature = std::max(
       config_.min_temperature, 
       current_temperature * config_.temperature_decay

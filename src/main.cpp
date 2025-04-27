@@ -1,9 +1,9 @@
-#include "core/network.h"
-#include "core/trainer.h"
-#include "core/config.h"
-#include "core/logger.h"
-#include "core/thread.h"
-#include "core/game.h"
+#include "network.h"
+#include "trainer.h"
+#include "config.h"
+#include "logger.h"
+#include "thread.h"
+#include "game.h"
 #include <iostream>
 #include <fstream>
 #include <omp.h>
@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
       }
 
       ///there's no temperature update in the trainer.
-      ///trainer.UpdateTemperature(current_temperature);
+      current_temperature = trainer.UpdateTemperature(current_temperature);
 
       /// every 5 iterations evaluation against random and 
       /// log the results

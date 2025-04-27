@@ -1,5 +1,5 @@
-#include "core/network.h"
-#include "core/logger.h"
+#include "network.h"
+#include "logger.h"
 
 #include <filesystem>
 #include <cassert>

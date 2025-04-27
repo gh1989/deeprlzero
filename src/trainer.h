@@ -10,9 +10,9 @@
 #include <vector>
 #include <torch/torch.h>
 
-#include "core/game.h"
-#include "core/network.h"
-#include "core/logger.h"
+#include "game.h"
+#include "network.h"
+#include "logger.h"
 
 namespace deeprlzero {
 

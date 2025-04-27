@@ -9,9 +9,9 @@
 #include <stdexcept>
 #include <unordered_set>
 
-#include "core/mcts.h"
-#include "core/config.h"
-#include "core/game.h"
+#include "mcts.h"
+#include "config.h"
+#include "game.h"
 
 namespace deeprlzero {
 
@@ -256,6 +256,35 @@ float MCTS::FullSearch(const Game* state, Node* node) {
   node->value_sum += best_value;
 
   return best_value;
+}
+
+void MCTS::AddDirichletNoiseToRoot(const Game* state) {
+  std::vector<int> valid_moves = state->GetValidMoves();
+  
+  // Create Dirichlet distribution for valid moves
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::gamma_distribution<float> gamma_dist(config_.gamma_alpha);
+  
+  // Sample noise for each valid move
+  std::vector<float> noise;
+  float noise_sum = 0.0f;
+  for (int move : valid_moves) {
+    float noise_sample = gamma_dist(gen);
+    noise.push_back(noise_sample);
+    noise_sum += noise_sample;
+  }
+  
+  // Mix with existing prior probabilities (25% noise, 75% original)
+  const float noise_weight = 0.50f;
+  for (size_t i = 0; i < valid_moves.size(); i++) {
+    int move = valid_moves[i];
+    if (root_->children[move]) {
+      float normalized_noise = noise[i] / noise_sum;
+      root_->children[move]->prior = (1.0f - noise_weight) * root_->children[move]->prior 
+                                   + noise_weight * normalized_noise;
+    }
+  }
 }
 
 } 

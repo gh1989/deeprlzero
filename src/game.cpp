@@ -2,8 +2,8 @@
 #include <stdexcept>
 #include <thread>
 
-#include "core/mcts.h"
-#include "core/game.h"
+#include "mcts.h"
+#include "game.h"
 
 namespace deeprlzero {
 
@@ -137,15 +137,14 @@ GameEpisode SelfPlay<GameType>::ExecuteEpisode() {
 
   while (!game->IsTerminal()) {
     torch::Tensor board = game->GetCanonicalBoard();
+    
+    mcts.AddDirichletNoiseToRoot(game.get());
 
-    // Perform MCTS simulations before getting probabilities
     for (int i = 0; i < config_.num_simulations; ++i) {
       mcts.Search(game.get(), mcts.GetRoot());
     }
 
-    std::vector<float> policy =
-        mcts.GetActionProbabilities(game.get(), current_temperature_);
-
+    std::vector<float> policy = mcts.GetActionProbabilities(game.get(), current_temperature_);
     episode.boards.push_back(board);
     episode.policies.push_back(policy);
 
@@ -154,9 +153,7 @@ GameEpisode SelfPlay<GameType>::ExecuteEpisode() {
     mcts.ResetRoot();  // Reset the tree for the next move
   }
 
-  // Set the final outcome of the game
   episode.outcome = game->GetGameResult();
-
   return episode;
 }
 

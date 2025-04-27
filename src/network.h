@@ -5,7 +5,7 @@
 #include <mutex>
 #include <torch/torch.h>
 
-#include "core/config.h"
+#include "config.h"
 
 namespace deeprlzero {
 

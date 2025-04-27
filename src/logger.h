@@ -8,7 +8,7 @@
 #include <source_location>
 #include <string_view>
 
-#include "core/config.h"
+#include "config.h"
 
 namespace deeprlzero {
 
