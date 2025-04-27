@@ -8,7 +8,7 @@ make
 
 Run:
 ```
-./deeprlzero -f 32 -r 3 -l 0.001 -s 100 -p 3.0 -t 1.0 -b 2048 -e 100 -i 25 -g 25 -m deeprlzero_model.pt -n 200 -a 0.52
+./bin/train_deeprlzero --games 100 --threads 18 --learning-rate 0.001 --simulations 32 --acceptance-threshold 0.55 --eval-games 10 --iterations 1000
 ```
 
 Options:
