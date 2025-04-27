@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "CMake: configure",
+      "type": "shell",
+      "command": "mkdir -p build && cd build && cmake ..",
+      "group": "build"
+    },
+    {
+      "label": "CMake: build",
+      "type": "shell",
+      "command": "cd build && make -j",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "dependsOn": [
+        "CMake: configure"
+      ]
+    },
+    {
+      "label": "CMake: clean",
+      "type": "shell",
+      "command": "cd build && make clean",
+      "group": "build"
+    }
+  ]
+}

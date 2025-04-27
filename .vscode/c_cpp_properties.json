@@ -1,0 +1,22 @@
+{
+  "configurations": [
+    {
+      "name": "Linux",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/include",
+        "/usr/local/cuda-12.6/include",
+        "/home/gregg/miniconda3/lib/python3.12/site-packages/torch/include",
+        "/home/gregg/miniconda3/lib/python3.12/site-packages/torch/include/torch/csrc/api/include"
+      ],
+      "defines": [],
+      "compilerPath": "/usr/bin/g++",
+      "cStandard": "c17",
+      "cppStandard": "c++23",
+      "intelliSenseMode": "linux-gcc-x64",
+      "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+      "configurationProvider": "ms-vscode.cmake-tools"
+    }
+  ],
+  "version": 4
+}
