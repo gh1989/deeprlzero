@@ -1,5 +1,3 @@
-#include "core/mcts.h"
-
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -11,6 +9,7 @@
 #include <stdexcept>
 #include <unordered_set>
 
+#include "core/mcts.h"
 #include "core/config.h"
 #include "core/game.h"
 

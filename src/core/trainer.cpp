@@ -1,12 +1,10 @@
-#include "core/trainer.h"
-
-#include <torch/torch.h>
-
 #include <algorithm>
 #include <iostream>
 #include <random>
+#include <torch/torch.h>
 
 #include "core/mcts.h"
+#include "core/trainer.h"
 
 namespace deeprlzero {
 

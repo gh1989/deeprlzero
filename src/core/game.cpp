@@ -1,10 +1,9 @@
-#include "core/game.h"
-
 #include <future>
 #include <stdexcept>
 #include <thread>
 
 #include "core/mcts.h"
+#include "core/game.h"
 
 namespace deeprlzero {
 

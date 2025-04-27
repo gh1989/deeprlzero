@@ -14,16 +14,13 @@ namespace deeprlzero {
 
 class Logger {
  public:
-  // Error types
   enum class Error { FileOpenError, WriteError };
-
   static Logger& GetInstance(const Config& config = Config()) {
     static Logger instance(config);
     return instance;
   }
 
-  // Modern logging with std::expected and source_location
-  [[nodiscard]] std::expected<void, Error> Log(
+  [[nodiscard("ignoring log errors could lead to undetected logging failures")]] std::expected<void, Error> Log(
       std::string_view message,
       const std::source_location location = std::source_location::current()) {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -46,9 +43,9 @@ class Logger {
     }
   }
 
-  // Template for logging with formatting
   template <typename... Args>
-  [[nodiscard]] std::expected<void, Error> LogFormat(
+  [[nodiscard("ignoring log format errors could lead to undetected logging "
+              "failures")]] std::expected<void, Error> LogFormat(
       std::format_string<Args...> fmt, Args&&... args) {
     try {
       auto formatted = std::format(fmt, std::forward<Args>(args)...);

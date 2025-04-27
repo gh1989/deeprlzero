@@ -1,14 +1,13 @@
 #ifndef TRAINER_H_
 #define TRAINER_H_
 
-#include <torch/torch.h>
-
 #include <deque>
 #include <format>
 #include <iostream>
 #include <memory>
 #include <numeric>
 #include <vector>
+#include <torch/torch.h>
 
 #include "core/game.h"
 #include "core/network.h"

@@ -1,10 +1,9 @@
 #ifndef NEURAL_NETWORK_H_
 #define NEURAL_NETWORK_H_
 
-#include <torch/torch.h>
-
 #include <memory>
 #include <mutex>
+#include <torch/torch.h>
 
 #include "core/config.h"
 
