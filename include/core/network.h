@@ -1,12 +1,12 @@
-#ifndef ALPHAZERO_NEURAL_NETWORK_H_
-#define ALPHAZERO_NEURAL_NETWORK_H_
+#ifndef NEURAL_NETWORK_H_
+#define NEURAL_NETWORK_H_
 
 #include <memory>
 #include <mutex>
 #include <torch/torch.h>
 #include "core/config.h"
 
-namespace alphazero {
+namespace deeprlzero {
 
 class NeuralNetwork : public torch::nn::Cloneable<NeuralNetwork>,
                      public std::enable_shared_from_this<NeuralNetwork> {
@@ -109,6 +109,6 @@ class NeuralNetwork : public torch::nn::Cloneable<NeuralNetwork>,
   int board_size_ = 9; // 3x3 board
 };
 
-}  // namespace alphazero
+}
 
-#endif  // ALPHAZERO_NEURAL_NETWORK_H_
+#endif

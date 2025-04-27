@@ -64,34 +64,29 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 # Source files for the main library
 set(SOURCES
     src/core/game.cpp
-    src/core/tictactoe.cpp
-    src/core/neural_network.cpp
-    src/core/network_manager.cpp
+    src/core/network.cpp
     src/core/mcts.cpp
-    src/core/self_play.cpp
     src/core/trainer.cpp
-    src/core/evaluator.cpp
-    src/core/utils.cpp
 )
 
 # Create the main library target
-add_library(alphazero_lib ${SOURCES})
-target_link_libraries(alphazero_lib 
+add_library(deeprlzero_lib ${SOURCES})
+target_link_libraries(deeprlzero_lib 
     PRIVATE 
     ${TORCH_LIBRARIES}
     OpenMP::OpenMP_CXX
     ${CUDA_LIBRARIES}
 )
-target_include_directories(alphazero_lib 
+target_include_directories(deeprlzero_lib 
     PRIVATE 
     ${CMAKE_SOURCE_DIR}/include
 )
 
 # Build the main training executable
-add_executable(train_alphazero src/main.cpp)
-target_link_libraries(train_alphazero 
+add_executable(train_deeprlzero src/main.cpp)
+target_link_libraries(train_deeprlzero 
     PRIVATE 
-    alphazero_lib 
+    deeprlzero_lib 
     ${TORCH_LIBRARIES}
     OpenMP::OpenMP_CXX
 )
@@ -99,61 +94,18 @@ target_link_libraries(train_alphazero
 # OpenMP support
 find_package(OpenMP REQUIRED)
 if(OpenMP_CXX_FOUND)
-    target_link_libraries(alphazero_lib PUBLIC OpenMP::OpenMP_CXX)
+    target_link_libraries(deeprlzero_lib PUBLIC OpenMP::OpenMP_CXX)
 endif()
-target_link_libraries(train_alphazero PRIVATE OpenMP::OpenMP_CXX)
+target_link_libraries(train_deeprlzero PRIVATE OpenMP::OpenMP_CXX)
 
-# Build a standalone executable from your converted troubleshooting.cpp.
-# (Note: We no longer want to use Google Test here.)
-add_executable(mcts_executable troubleshooting/troubleshooting.cpp)
-target_link_libraries(mcts_executable
-    PRIVATE
-    alphazero_lib
-    ${TORCH_LIBRARIES}
-    OpenMP::OpenMP_CXX
-)
-
-# Add the tune_parameters executable
-#add_executable(tune_parameters tuning/tune_parameters.cpp)
-
-# Link it to your project library and Torch libraries.
-# Ensure that ${TORCH_LIBRARIES} is defined (e.g., via find_package(Torch REQUIRED))
-#target_link_libraries(tune_parameters PRIVATE alphazero_lib ${TORCH_LIBRARIES})
-
-# Optionally, enforce a C++ standard (e.g., C++17)
-#set_property(TARGET tune_parameters PROPERTY CXX_STANDARD 17)
-
-# Set output directories for targets
-set_target_properties(alphazero_lib PROPERTIES
+set_target_properties(deeprlzero_lib PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
-#set_target_properties(train_alphazero mcts_executable tune_parameters PROPERTIES
-set_target_properties(train_alphazero mcts_executable PROPERTIES
+set_target_properties(train_deeprlzero PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
-# Debug information
-message(STATUS "PyTorch cmake path: ${CMAKE_PREFIX_PATH}")
-message(STATUS "Torch libraries: ${TORCH_LIBRARIES}")
-message(STATUS "C++ compiler: ${CMAKE_CXX_COMPILER}")
-message(STATUS "CUDA compiler: ${CMAKE_CUDA_COMPILER}")
-message(STATUS "Torch version: ${Torch_VERSION}")
-message(STATUS "OpenMP found: ${OpenMP_CXX_FOUND}")
-
-# Enable profiling for your targets (will only apply in Debug)
-enable_profiling(alphazero_lib)
-enable_profiling(train_alphazero)
-enable_profiling(mcts_executable)
-
-# Add gradient test executable
-add_executable(gradient_test src/gradient_test.cpp)
-target_link_libraries(gradient_test PRIVATE alphazero_lib ${TORCH_LIBRARIES})
-set_property(TARGET gradient_test PROPERTY CXX_STANDARD 23)
-
-# Add gradient test executable
-add_executable(min_net_test src/minimal_net_test.cpp)
-target_link_libraries(min_net_test PRIVATE alphazero_lib ${TORCH_LIBRARIES})
-set_property(TARGET min_net_test PROPERTY CXX_STANDARD 23)
-
+enable_profiling(deeprlzero_lib)
+enable_profiling(train_deeprlzero)

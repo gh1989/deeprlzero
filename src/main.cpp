@@ -1,131 +1,178 @@
-#include "core/neural_network.h"
-#include "core/network_manager.h"
-#include "core/self_play.h"
+#include "core/network.h"
 #include "core/trainer.h"
-#include "core/evaluator.h"
 #include "core/config.h"
 #include "core/logger.h"
 #include "core/thread.h"
-#include "core/mcts_stats.h"
-#include "core/tictactoe.h"
-#include "core/logger.h"
+#include "core/game.h"
 #include <iostream>
 #include <fstream>
 #include <omp.h>
+#include <format>
+#include <filesystem>
+
+namespace deeprlzero {
+
+float CalculatePolicyEntropy(const std::vector<float>& policy) {
+  float entropy = 0.0f;
+  for (float p : policy) {
+    // Handle zero probabilities (log(0) is undefined)
+    if (p > 1e-10) {
+      entropy -= p * std::log(p);
+    }
+  }
+  return entropy;
+}
+
+float CalculateAverageExplorationMetric(const std::vector<GameEpisode>& episodes) {
+  if (episodes.empty()) {
+    return 0.0f;
+  }
+  
+  float total_entropy = 0.0f;
+  int total_moves = 0;
+  
+  for (const auto& episode : episodes) {
+    for (const auto& policy : episode.policies) {
+      total_entropy += CalculatePolicyEntropy(policy);
+      total_moves++;
+    }
+  }
+  
+  return total_moves > 0 ? total_entropy / total_moves : 0.0f;
+}
+
+} // namespace deeprlzero
 
 int main(int argc, char** argv) {
-    auto config = alphazero::Config::ParseCommandLine(argc, argv);
-    auto& logger = alphazero::Logger::GetInstance(config);
-    alphazero::NetworkManager network_manager(config);
+    auto config = deeprlzero::Config::ParseCommandLine(argc, argv);
+    auto& logger = deeprlzero::Logger::GetInstance(config);
     
     if (!torch::cuda::is_available()) {
-        if (auto result = logger.Log("ERROR: CUDA is not available. This program requires a CUDA-capable GPU for training."); 
-            !result) {
-            std::cerr << "Failed to log error message" << std::endl;
-            return 1;
-        }
+        logger.Log("ERROR: CUDA is not available. This program requires a CUDA-capable GPU for training.");
         return 1;
     }
 
-    if(!network_manager.LoadBestNetwork()) {
-        auto network = network_manager.CreateInitialNetwork();
-        network_manager.SetBestNetwork(network);
+    std::shared_ptr<deeprlzero::NeuralNetwork> best_network = nullptr;
+    float current_temperature = config.initial_temperature;
+    int iterations_since_improvement = 0;
+
+    auto createInitialNetwork = [&config]() -> std::shared_ptr<deeprlzero::NeuralNetwork> {
+        try {
+            return std::make_shared<deeprlzero::NeuralNetwork>(config);
+        } catch (const std::exception& e) {
+            std::cerr << "Error creating network: " << e.what() << std::endl;
+            return nullptr;
+        }
+    };
+
+    auto loadBestNetwork = [&config, &logger]() -> std::shared_ptr<deeprlzero::NeuralNetwork> {
+        try {
+            if (std::filesystem::exists(config.model_path)) {
+                logger.LogFormat("Loading model from: {}", config.model_path);
+                auto network = std::make_shared<deeprlzero::NeuralNetwork>(config);
+                torch::load(network, config.model_path);
+                logger.Log("Model loaded successfully");
+                return network;
+            }
+        } catch (const std::exception& e) {
+            logger.LogFormat("Error loading model: {}", e.what());
+        }
+        return nullptr;
+    };
+    
+    auto saveBestNetwork = [&config, &logger](std::shared_ptr<deeprlzero::NeuralNetwork> network) {
+        try {
+            logger.LogFormat("Saving model to: {}", config.model_path);
+            torch::save(network, config.model_path);
+            logger.Log("Model saved successfully");
+        } catch (const std::exception& e) {
+            logger.LogFormat("Error saving model: {}", e.what());
+        }
+    };
+
+    auto updateTemperature = [&current_temperature, &config]() {
+        current_temperature = std::max(
+            config.min_temperature, 
+            current_temperature * config.temperature_decay
+        );
+        return current_temperature;
+    };
+
+    auto acceptOrRejectNewNetwork = [&](
+        std::shared_ptr<deeprlzero::NeuralNetwork> candidate_network,
+        const deeprlzero::EvaluationStats& stats) -> bool {
+        
+        float win_loss_ratio = (stats.win_rate + 0.5f * stats.draw_rate) / 
+                              (stats.loss_rate + 0.5f * stats.draw_rate);
+                              
+        if (win_loss_ratio >= config.acceptance_threshold) {
+            // Accept the new network
+            best_network = candidate_network;
+            saveBestNetwork(best_network);
+            iterations_since_improvement = 0;
+            return true;
+        } else {
+            // Reject the new network
+            iterations_since_improvement++;
+            return false;
+        }
+    };
+    
+    // Initialize best network
+    best_network = loadBestNetwork();
+    if (!best_network) {
+        logger.Log("No existing model found. Creating a new one.");
+        best_network = createInitialNetwork();
+        saveBestNetwork(best_network);
     }
 
-    alphazero::MCTSStats aggregated_stats;
-
     for (int iter = 0; iter < config.num_iterations; ++iter) {
-        auto current_best_network = network_manager.GetBestNetwork();
-        auto network_to_train = std::dynamic_pointer_cast<alphazero::NeuralNetwork>(current_best_network->clone(torch::kCPU));
+        auto network_to_train = std::dynamic_pointer_cast<deeprlzero::NeuralNetwork>(
+            best_network->clone(torch::kCPU));
 
-        // Create the necessary objects with proper template parameter
-        alphazero::SelfPlay<alphazero::TicTacToe> self_play(
-            network_manager.GetBestNetwork(), 
+        deeprlzero::SelfPlay<deeprlzero::TicTacToe> self_play(
+            best_network, 
             config,
-            network_manager.GetCurrentTemperature()
+            current_temperature
         );
-        alphazero::Trainer trainer(network_to_train, config);
-        alphazero::Evaluator evaluator(network_manager.GetBestNetwork(), config);
+        deeprlzero::Trainer trainer(network_to_train, config);
+        deeprlzero::Evaluator evaluator(best_network, config);
 
-        if (auto log_result = logger.LogFormat("Starting iteration {}/{}", iter + 1, config.num_iterations); !log_result) {
-            std::cerr << "Failed to log iteration start" << std::endl;
-        }
-
-        //Generate the episodes with the best network.
-        std::vector<alphazero::GameEpisode> episodes;
-
+        logger.LogFormat("Starting iteration {}/{}", iter + 1, config.num_iterations);
+        std::vector<deeprlzero::GameEpisode> episodes;
         if (config.num_threads > 1) {
             episodes = self_play.ExecuteEpisodesParallel();
         } else {
+            episodes.reserve(config.episodes_per_iteration);
             for (int i = 0; i < config.episodes_per_iteration; ++i) {
                 episodes.push_back(self_play.ExecuteEpisode());
             }
         }
         
-        if (auto result = logger.Log("Completed self-play episodes generation."); !result) {
-            std::cerr << "Failed to log completion" << std::endl;
-        }
-        //Train the clone of the best network with these episodes
+        logger.Log("Completed self-play episodes generation.");
+
+        float exploration_metric = deeprlzero::CalculateAverageExplorationMetric(episodes);
+        logger.LogFormat("Exploration metric: {:.4f}", exploration_metric);
         trainer.Train(episodes);
-        //Now which network should be instantiated for the evaluator? and which one is the argument?
-        alphazero::EvaluationStats evaluation_stats = evaluator.EvaluateAgainstNetwork(network_to_train);
+        deeprlzero::EvaluationStats evaluation_stats = 
+            evaluator.EvaluateAgainstNetwork(network_to_train);
+        bool network_accepted = acceptOrRejectNewNetwork(network_to_train, evaluation_stats);
         
-        // Print acceptance criteria and stats for debugging
-        /*
-        std::cout << "\n=== NETWORK ACCEPTANCE CRITERIA ===" << std::endl;
-        std::cout << "Win rate: " << evaluation_stats.win_rate * 100 << "%" << std::endl;
-        std::cout << "Draw rate: " << evaluation_stats.draw_rate * 100 << "%" << std::endl;
-        std::cout << "Loss rate: " << evaluation_stats.loss_rate * 100 << "%" << std::endl;
-        std::cout << "New performance (win+draw): " << (evaluation_stats.win_rate + evaluation_stats.draw_rate) * 100 << "%" << std::endl;
-        std::cout << "Acceptance threshold: " << config.acceptance_threshold * 100 << "%" << std::endl;
-        std::cout << "Loss threshold: " << config.loss_threshold * 100 << "%" << std::endl;
-        std::cout << "=================================" << std::endl;
-        */
-
-        // Save the result of acceptance/rejection
-        bool network_accepted = network_manager.AcceptOrRejectNewNetwork(network_to_train, evaluation_stats);
-        std::cout << "Network acceptance decision: " << (network_accepted ? "ACCEPTED" : "REJECTED") << std::endl;
-
-        // If network was accepted, evaluate against random player
-        if (network_accepted) {
-            std::cout << "\nEvaluating accepted network against random player..." << std::endl;
-            alphazero::EvaluationStats random_stats = evaluator.EvaluateAgainstRandom();
+        logger.LogFormat("Network acceptance decision: {}", 
+                       network_accepted ? "ACCEPTED" : "REJECTED");
+        updateTemperature();
+        logger.LogFormat("Temperature updated to: {:.4f}", current_temperature);
+        if (iter % 5 == 0) {
+            deeprlzero::EvaluationStats random_eval_stats = 
+                evaluator.EvaluateAgainstRandom();
             
-            std::cout << "Performance against random player:" << std::endl;
-            std::cout << "  Win rate: " << (random_stats.win_rate * 100) << "%" << std::endl;
-            std::cout << "  Draw rate: " << (random_stats.draw_rate * 100) << "%" << std::endl;
-            std::cout << "  Loss rate: " << (random_stats.loss_rate * 100) << "%" << std::endl;
+            logger.LogFormat("Performance vs Random: Win: {:.1f}%, Draw: {:.1f}%, Loss: {:.1f}%",
+                           random_eval_stats.win_rate * 100,
+                           random_eval_stats.draw_rate * 100,
+                           random_eval_stats.loss_rate * 100);
         }
-
-        if (network_accepted) {
-            network_manager.SetBestNetwork(network_to_train);
-        }
-        network_manager.UpdateTemperature();
     }
     
-    // Save final model
-    torch::serialize::OutputArchive final_archive;
-    network_manager.GetBestNetwork()->save(final_archive);
-    //final_archive.save_to(config.model_path);
-    
-    // Final evaluation
-    alphazero::Evaluator final_evaluator(network_manager.GetBestNetwork(), config);
-    
-    // This doesn't make sense - we're evaluating the network against itself
-    // Let's remove this redundant evaluation
-    // alphazero::EvaluationStats final_win_rate_best = final_evaluator.EvaluateAgainstNetwork(network_manager.GetBestNetwork());
-    
-    alphazero::EvaluationStats final_win_rate_random = final_evaluator.EvaluateAgainstRandom();
-    
-    if (auto result = logger.LogFormat("Final Evaluation Results:\n  Win rate vs random: {}%",
-        final_win_rate_random.WinStats()); !result) {
-        std::cerr << "Failed to log final results" << std::endl;
-    }
-    
-    // Handle the return value of LogStatistics() since it's marked with [[nodiscard]]
-    if (auto result = aggregated_stats.LogStatistics(); !result) {
-        std::cerr << "Failed to log MCTS statistics" << std::endl;
-    }
-    
+    logger.Log("Training complete!");
     return 0;
 } 

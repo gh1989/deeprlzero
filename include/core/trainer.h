@@ -1,15 +1,17 @@
-#ifndef ALPHAZERO_TRAINER_H_
-#define ALPHAZERO_TRAINER_H_
+#ifndef TRAINER_H_
+#define TRAINER_H_
 
-#include "core/neural_network.h"
-#include "core/self_play.h"
+#include "core/network.h"
+#include "core/game.h"
 #include <vector>
 #include <deque>
 #include <torch/torch.h>
 #include <iostream>
 #include <numeric>
+#include <memory>
+#include <format>
 
-namespace alphazero {
+namespace deeprlzero {
 
 class Trainer {
  public:
@@ -54,6 +56,47 @@ class Trainer {
   float last_param_variance_ = 0.0f;
 };
 
-}  // namespace alphazero
 
-#endif  // ALPHAZERO_TRAINER_H_ 
+// New structure to hold detailed evaluation outcomes.
+struct EvaluationStats {
+    float win_rate;
+    float draw_rate;
+    float loss_rate;
+
+    std::string WinStats() const {
+        return std::format("Win rate: {}%, Draw rate: {}%, Loss rate: {}%",
+            win_rate * 100, draw_rate * 100, loss_rate * 100);
+    }
+
+    bool IsBetterThan(const EvaluationStats& other) const {
+        float score = win_rate + draw_rate * 0.5;
+        float other_score = other.win_rate + other.draw_rate * 0.5;
+        return score > other_score;
+    }
+};
+
+class Evaluator {
+public:
+    Evaluator(std::shared_ptr<NeuralNetwork> network, const Config& config);
+    
+    // Play against random player
+    EvaluationStats EvaluateAgainstRandom();
+    
+    // Play two networks against each other
+    EvaluationStats EvaluateNetworks(std::shared_ptr<NeuralNetwork> network1, 
+                          std::shared_ptr<NeuralNetwork> network2,
+                          int num_games = 100);
+
+    EvaluationStats EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> opponent);
+
+private:
+    bool IsIdenticalNetwork(std::shared_ptr<NeuralNetwork> network1, 
+                            std::shared_ptr<NeuralNetwork> network2);
+    static constexpr int kNumEvaluationGames = 100;  // Fixed constant
+    std::shared_ptr<NeuralNetwork> network_;
+    const Config& config_;
+};
+
+}
+
+#endif

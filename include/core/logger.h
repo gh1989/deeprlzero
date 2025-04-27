@@ -1,5 +1,5 @@
-#ifndef ALPHAZERO_LOGGER_H_
-#define ALPHAZERO_LOGGER_H_
+#ifndef LOGGER_H_
+#define LOGGER_H_
 
 #include "core/config.h"
 #include <expected>
@@ -9,7 +9,7 @@
 #include <fstream>
 #include <mutex>
 
-namespace alphazero {
+namespace deeprlzero {
 
 class Logger {
 public:
@@ -83,6 +83,6 @@ private:
     std::mutex mutex_;
 };
 
-} // namespace alphazero
+}
 
-#endif // ALPHAZERO_LOGGER_H_
+#endif

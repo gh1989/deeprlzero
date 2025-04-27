@@ -1,10 +1,10 @@
-#ifndef ALPHAZERO_CONFIG_H_
-#define ALPHAZERO_CONFIG_H_
+#ifndef CONFIG_H_
+#define CONFIG_H_
 
 #include <iostream>
 #include <string>
 
-namespace alphazero {
+namespace deeprlzero {
 
 class Config {
  public:
@@ -38,8 +38,8 @@ class Config {
   int num_evaluation_games = 32;
   float acceptance_threshold = 0.55f;
     
-  std::string model_path = "alphazero_model.pt";
-  std::string log_file_path = "alphazero_log.txt";
+  std::string model_path = "deeprlzero_model.pt";
+  std::string log_file_path = "deeprlzero_log.txt";
   
   int num_threads = 24;
   float l2_reg = 1e-4;
@@ -105,7 +105,7 @@ class Config {
 
  private:
   static void PrintUsage() {
-    std::cout << "Usage: train_alphazero [options]\n"
+    std::cout << "Usage: train_deeprlzero [options]\n"
               << "Options:\n"
               << "  -f, --filters <n>          Number of filters (default: 32)\n"
               << "  -r, --residual-blocks <n>  Number of residual blocks (default: 3)\n"
@@ -117,13 +117,13 @@ class Config {
               << "  -e, --epochs <n>          Number of epochs (default: 100)\n"
               << "  -i, --iterations <n>      Number of iterations (default: 25)\n"
               << "  -g, --games <n>           Games per iteration (default: 25)\n"
-              << "  -m, --model <path>        Model path (default: alphazero_model.pt)\n"
+              << "  -m, --model <path>        Model path (default: deeprlzero_model.pt)\n"
               << "  -n, --eval-games <n>      Number of evaluation games (default: 200)\n"
               << "  -a, --acceptance-threshold <f>  Acceptance threshold (default: 0.52)\n"
               << "  -h, --help                Print this help message\n";
   }
 };
 
-}  // namespace alphazero
+}
 
-#endif  // ALPHAZERO_CONFIG_H_ 
+#endif 

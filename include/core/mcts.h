@@ -1,15 +1,14 @@
-#ifndef ALPHAZERO_MCTS_H
-#define ALPHAZERO_MCTS_H
+#ifndef MCTS_H
+#define MCTS_H
 
 #include "game.h"
-#include "neural_network.h"
+#include "network.h"
 #include "config.h"
 #include <memory>
 #include <vector>
 #include <cmath>
-#include "core/mcts_stats.h"
 
-namespace alphazero {
+namespace deeprlzero {
 
 struct Node {
     float value_sum = 0.0f;
@@ -63,9 +62,6 @@ public:
 
     Node* GetRoot() const { return root_.get(); }
 
-    // Add stats getter
-    const MCTSStats& GetStats() const { return stats_; }
-    void ClearStats() { stats_ = MCTSStats(); }
     float Backpropagate(Node* node, float value);
     void Search(const Game* state, Node* node);
     float FullSearch(const Game* state, Node* node);
@@ -83,7 +79,6 @@ private:
     
     // Add this member variable to track the last move
     int last_move_ = -1;
-    MCTSStats stats_;
         
     int GetNodeDepth(Node* node) const {
         int depth = 0;
@@ -95,6 +90,6 @@ private:
     }
 };
 
-} // namespace alphazero
+}
 
-#endif // ALPHAZERO_MCTS_H 
+#endif
