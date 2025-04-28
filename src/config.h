@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <string>
+#include <cmath>
 
 namespace deeprlzero {
 
@@ -15,7 +16,7 @@ class Config {
   float prior_alpha = 0.75f;
 
   // Temperature annealing
-  float initial_temperature = 1.5f;
+  float initial_temperature = 5.0f;
   float min_temperature = 0.1f;
   float temperature_decay = 0.99f;
 

@@ -80,10 +80,10 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 
 # Source files for the main library
 set(SOURCES
-    src/game.cpp
-    src/network.cpp
-    src/mcts.cpp
-    src/trainer.cpp
+    src/game.cxx
+    src/network.cxx
+    src/mcts.cxx
+    src/trainer.cxx
 )
 
 # Create the main library target
@@ -100,8 +100,16 @@ target_include_directories(deeprlzero_lib
 )
 
 # Build the main training executable
-add_executable(train_deeprlzero src/main.cpp)
+add_executable(train_deeprlzero src/main.cxx)
 target_link_libraries(train_deeprlzero 
+    PRIVATE 
+    deeprlzero_lib 
+    ${TORCH_LIBRARIES}
+    OpenMP::OpenMP_CXX
+)
+
+add_executable(explorer src/explorer.cxx)
+target_link_libraries(explorer 
     PRIVATE 
     deeprlzero_lib 
     ${TORCH_LIBRARIES}
@@ -124,5 +132,10 @@ set_target_properties(train_deeprlzero PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
+set_target_properties(explorer PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+
 enable_profiling(deeprlzero_lib)
 enable_profiling(train_deeprlzero)
+enable_profiling(explorer)
