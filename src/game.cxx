@@ -196,11 +196,12 @@ GamePositions SelfPlay<GameType>::ExecuteEpisode() {
   return positions;
 }
 
+// Should add nodiscard and expected error or GamePositions
 template <typename GameType>
 GamePositions SelfPlay<GameType>::ExecuteEpisodesParallel() {
   // First, run a sample episode to estimate position count
   auto sample = ExecuteEpisode();
-  int estimated_positions_per_episode = sample.size();
+  int estimated_positions_per_episode = sample.boards.size();
   
   // Calculate total threads and distribution
   const int num_threads = std::min(config_.num_threads, 
