@@ -80,14 +80,26 @@ void Trainer::Train(const GamePositions& positions) {
 
 
 float Trainer::UpdateTemperature(float current_temperature) {
-  Logger& logger = Logger::GetInstance();
-  current_temperature = std::max(
-      config_.min_temperature, 
-      current_temperature * config_.temperature_decay
-  );
-  logger.LogFormat("Temperature updated to: {:.4f}", current_temperature);
+  // Update the self-play exploration temperature
+  Logger& logger = Logger::GetInstance(config_);
+  
+  // If early in training, maintain higher temperature
+  if (iterations_since_improvement_ < 5) {
+    current_temperature = std::max(
+        config_.min_temperature,
+        current_temperature * config_.temperature_decay
+    );
+  } else {
+    // After several iterations of no improvement, drop temperature faster
+    current_temperature = std::max(
+        config_.min_temperature,
+        current_temperature * (config_.temperature_decay * 0.9f)
+    );
+  }
+  
+  logger.LogFormat("Self-play temperature updated to: {:.4f}", current_temperature);
   return current_temperature;
-};
+}
 
 bool Trainer::AcceptOrRejectNewNetwork(
     std::shared_ptr<NeuralNetwork> candidate_network,
@@ -188,14 +200,14 @@ EvaluationStats Trainer::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> o
         for (int sim = 0; sim < config_.num_simulations * 4; ++sim) {
           mcts_main.Search(game.get(), mcts_main.GetRoot());
         }
-        int action = mcts_main.SelectMove(game.get(), 0.6f);
+        int action = mcts_main.SelectMove(game.get(), config_.eval_temperature);
         game->MakeMove(action);
       } else {
         mcts_opponent.ResetRoot();
         for (int sim = 0; sim < config_.num_simulations * 4; ++sim) {
           mcts_opponent.Search(game.get(), mcts_opponent.GetRoot());
         }
-        int action = mcts_opponent.SelectMove(game.get(), 0.6f);
+        int action = mcts_opponent.SelectMove(game.get(), config_.eval_temperature);
         game->MakeMove(action);
       }
       move_count++;
@@ -244,7 +256,7 @@ EvaluationStats Trainer::EvaluateAgainstRandom() {
         for (int sim = 0; sim < config_.num_simulations * 4; ++sim) {
           mcts.Search(game.get(), mcts.GetRoot());
         }
-        int action = mcts.SelectMove(game.get(), 0.0f);
+        int action = mcts.SelectMove(game.get(), config_.eval_temperature);
         game->MakeMove(action);
       } else {
         auto valid_moves = game->GetValidMoves();

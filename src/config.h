@@ -16,9 +16,9 @@ class Config {
   float prior_alpha = 0.75f;
   float weight_decay = 1e-4;
   // Temperature annealing
-  float initial_temperature = 5.0f;
+  float initial_temperature = 1.0f;
   float min_temperature = 0.1f;
-  float temperature_decay = 0.99f;
+  float temperature_decay = 0.95f;
 
   // MCTS configuration
   int num_simulations = 64;
@@ -47,6 +47,10 @@ class Config {
   float dropout_rate = 0.3;
 
   float loss_threshold = 0.25f;
+
+  // Evaluation temperatures
+  float eval_temperature = 0.0f;
+  float self_play_temperature = 1.0f;
 
   static Config ParseCommandLine(int argc, char** argv) {
     Config config;

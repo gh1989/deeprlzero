@@ -173,11 +173,15 @@ GamePositions SelfPlay<GameType>::ExecuteEpisode() {
       mcts.Search(game.get(), mcts.GetRoot());
     }
 
-    std::vector<float> policy = mcts.GetActionProbabilities(game.get(), current_temperature_);
+    // Use a smarter temperature approach that decreases as the game progresses
+    float move_temperature = current_temperature_;
+    int move_number = positions.boards.size();
+
+    std::vector<float> policy = mcts.GetActionProbabilities(game.get(), move_temperature);
     positions.boards.push_back(board);
     positions.policies.push_back(policy);
 
-    int move = mcts.SelectMove(game.get(), current_temperature_);
+    int move = mcts.SelectMove(game.get(), move_temperature);
     game->MakeMove(move);
     mcts.ResetRoot();  // Reset the tree for the next move
   }
