@@ -116,6 +116,15 @@ target_link_libraries(explorer
     OpenMP::OpenMP_CXX
 )
 
+# Add play executable
+add_executable(play src/play.cxx)
+target_link_libraries(play 
+    PRIVATE 
+    deeprlzero_lib 
+    ${TORCH_LIBRARIES}
+    OpenMP::OpenMP_CXX
+)
+
 # OpenMP support
 find_package(OpenMP REQUIRED)
 if(OpenMP_CXX_FOUND)
@@ -136,6 +145,11 @@ set_target_properties(explorer PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
+set_target_properties(play PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+
 enable_profiling(deeprlzero_lib)
 enable_profiling(train_deeprlzero)
 enable_profiling(explorer)
+enable_profiling(play)
