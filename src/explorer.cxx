@@ -69,185 +69,88 @@ void PrintMCTSTree(Node* node, const Game* game, int depth = 0, int max_depth = 
   }
 }
 
-void runMiddleSquareDemonstration(std::shared_ptr<NeuralNetwork> network) {
-  std::cout << "\n==== Middle Square Learning Demonstration ====" << std::endl;
+GamePositions GenerateAllTicTacToeGames() {
+  std::cout << "Generating all tic-tac-toe positions..." << std::endl;
   
-  // Create a board with X in the middle only
-  TicTacToe game;
-  game.MakeMove(4); // Middle square (1,1) - 0-indexed
+  GamePositions all_positions;
+  std::set<std::string> visited_positions;
   
-  std::cout << "Training on position with X in middle:" << std::endl;
-  std::cout << game.ToString();
+  // Start with an empty game
+  auto game = std::make_shared<TicTacToe>();
   
-  // Create a GameEpisode with just this position
-  GameEpisode demo_episode;
+  // Use BFS to systematically explore all positions
+  std::queue<std::shared_ptr<TicTacToe>> position_queue;
+  position_queue.push(game);
   
-  // Create a policy that strongly prefers the middle
-  std::vector<float> middle_policy(TicTacToe::kNumActions, 0.0f);
-  middle_policy[4] = 1.0f; // 100% probability on middle
-  
-  // Add to our episode
-  demo_episode.boards.push_back(game.GetCanonicalBoard());
-  demo_episode.policies.push_back(middle_policy);
-  demo_episode.outcome = 1.0f; // X is winning
-  
-  // Check network prediction on empty board before training
-  network->eval();
-  float initial_middle_preference = 0.0f;  // Declare this outside the block
-  {
-    torch::NoGradGuard no_grad;
-    TicTacToe empty_game;
-    torch::Tensor empty_state = empty_game.GetCanonicalBoard();
-    auto [initial_policy, initial_value] = network->forward(empty_state.unsqueeze(0));
+  while (!position_queue.empty()) {
+    auto current_game = position_queue.front();
+    position_queue.pop();
     
-    std::cout << "\nBefore training (empty board):" << std::endl;
-    std::cout << "Policy output for each position:" << std::endl;
-    for (int i = 0; i < 9; i++) {
-      std::cout << initial_policy[0][i].item<float>() << " ";
-      if (i % 3 == 2) std::cout << std::endl;
+    // Create a string representation to track visited positions
+    // We can use the canonical board tensor instead of direct board access
+    auto canonical_board = current_game->GetCanonicalBoard();
+    auto board_accessor = canonical_board.accessor<float, 3>();
+    
+    // First channel is our pieces, second is opponent's
+    std::string board_key = "";
+    for (int i = 0; i < TicTacToe::kBoardSize; i++) {
+      for (int j = 0; j < TicTacToe::kBoardSize; j++) {
+        // Encode our pieces as '1', opponent as '2', empty as '0'
+        if (board_accessor[0][i][j] > 0.5f) {
+          board_key += "1";
+        } else if (board_accessor[1][i][j] > 0.5f) {
+          board_key += "2";
+        } else {
+          board_key += "0";
+        }
+      }
     }
-    std::cout << "Middle square preference: " << initial_policy[0][4].item<float>() << std::endl;
-    initial_middle_preference = initial_policy[0][4].item<float>();  // Save this value for later
-  }
-  
-  // Train the network on just this single example
-  network->train();
-  
-  // Prepare training data
-  torch::Tensor state_batch = demo_episode.boards[0].unsqueeze(0).clone().set_requires_grad(true);
-  torch::Tensor policy_batch = torch::from_blob(
-      const_cast<float*>(middle_policy.data()),
-      {1, TicTacToe::kNumActions},
-      torch::kFloat32).clone().set_requires_grad(true);
-  torch::Tensor value_batch = torch::tensor({{1.0f}}).clone().set_requires_grad(true);
-  
-  // Configure optimizer with higher learning rate
-  torch::optim::Adam optimizer(
-      network->parameters(),
-      torch::optim::AdamOptions(0.05).weight_decay(0.0001));  // Increased from 0.01 to 0.05
-  
-  // Train for 2000 epochs (previously 1000)
-  std::cout << "\nTraining for 2000 epochs on this single example..." << std::endl;
-  
-  for (int epoch = 0; epoch < 2000; epoch++) {
-    optimizer.zero_grad();
+    // Add current player to the key
+    board_key += std::to_string(current_game->GetCurrentPlayer());
     
-    auto output = network->forward(state_batch);
-    torch::Tensor policy_output = output.first;
-    torch::Tensor value_output = output.second;
-    
-    // Use cross-entropy loss for policy (better for classification tasks)
-    torch::Tensor log_softmax_policy = torch::log_softmax(policy_output, 1);
-    torch::Tensor policy_loss = -torch::sum(policy_batch * log_softmax_policy) / policy_batch.size(0);
-    
-    // Keep MSE for value loss
-    torch::Tensor value_loss = torch::mse_loss(value_output, value_batch);
-    
-    // Emphasize policy learning by weighting it higher
-    torch::Tensor total_loss = 5.0 * policy_loss + value_loss;
-    
-    if (epoch % 100 == 0) {
-      std::cout << "Epoch " << epoch << ", Policy Loss: " << policy_loss.item<float>() 
-                << ", Value Loss: " << value_loss.item<float>() 
-                << ", Total Loss: " << total_loss.item<float>() << std::endl;
+    // Skip if we've already seen this position
+    if (visited_positions.find(board_key) != visited_positions.end()) {
+      continue;
     }
+    visited_positions.insert(board_key);
     
-    total_loss.backward();
-    optimizer.step();
-  }
-    network->eval();
-  Config config;
-  network->to(torch::kCPU);
-  Trainer trainer(network, config);
-  trainer.EvaluateAgainstRandom();
-/*
-  // Check network prediction after training
-  {
-    torch::NoGradGuard no_grad;
-    TicTacToe empty_game;
-    torch::Tensor empty_state = empty_game.GetCanonicalBoard();
-    auto [final_policy, final_value] = network->forward(empty_state.unsqueeze(0));
+    // Add the current position to our collection
+    auto valid_moves = current_game->GetValidMoves();
     
-    // Apply softmax to get probabilities
-    torch::Tensor softmax_policy = torch::softmax(final_policy, 1);
-    
-    std::cout << "\nAfter training (empty board):" << std::endl;
-    std::cout << "Policy output for each position (after softmax):" << std::endl;
-    for (int i = 0; i < 9; i++) {
-      std::cout << softmax_policy[0][i].item<float>() << " ";
-      if (i % 3 == 2) std::cout << std::endl;
-    }
-    std::cout << "Middle square preference: " << softmax_policy[0][4].item<float>() * 100.0f << "%" << std::endl;
-    std::cout << "Did the network learn to prefer the middle? " 
-              << (softmax_policy[0][4].item<float>() > 0.5f ? "YES!" : "No") << std::endl;
-    
-    // Show raw outputs too
-    std::cout << "\nRaw policy logits:" << std::endl;
-    for (int i = 0; i < 9; i++) {
-      std::cout << final_policy[0][i].item<float>() << " ";
-      if (i % 3 == 2) std::cout << std::endl;
+    // Only add non-terminal positions
+    if (!valid_moves.empty()) {
+      // Create a uniform policy over valid moves for now
+      std::vector<float> policy(TicTacToe::kNumActions, 0.0f);
+      float prob = 1.0f / valid_moves.size();
+      for (int move : valid_moves) {
+        policy[move] = prob;
+      }
+      
+      all_positions.boards.push_back(current_game->GetCanonicalBoard());
+      all_positions.policies.push_back(policy);
+      
+      // For now, use 0 as the value (can be updated with minimax later)
+      all_positions.values.push_back(0.0f);
+      
+      // Explore all valid next positions
+      for (int move : valid_moves) {
+        auto next_game = std::make_shared<TicTacToe>(*current_game);
+        next_game->MakeMove(move);
+        position_queue.push(next_game);
+      }
     }
   }
-  */
+  
+  std::cout << "Generated " << all_positions.boards.size() << " unique positions" << std::endl;
+  return all_positions;
 }
 
-void GenerateAllTicTacToeGames(std::vector<GameEpisode>& episodes, std::shared_ptr<TicTacToe> game, 
-                               std::vector<torch::Tensor>& boards, 
-                               std::vector<std::vector<float>>& policies, 
-                               int depth = 0) {
-  // If the game is over, we've found a complete path
-  if (game->IsTerminal()) {
-    GameEpisode episode;
-    episode.boards = boards;
-    episode.policies = policies;
-    episode.outcome = game->GetGameResult();
-    episodes.push_back(episode);
-    return;
-  }
-
-  // Get all valid moves for current game state
-  auto valid_moves = game->GetValidMoves();
-  
-  // Try each valid move
-  for (int move : valid_moves) {
-    // Create policy that focuses on this move
-    std::vector<float> policy(TicTacToe::kNumActions, 0.0f);
-    policy[move] = 1.0f;
-    
-    // Save the current state
-    boards.push_back(game->GetCanonicalBoard());
-    policies.push_back(policy);
-    
-    // Make the move
-    game->MakeMove(move);
-    
-    // Recursive DFS to explore all possible game continuations
-    GenerateAllTicTacToeGames(episodes, std::make_shared<TicTacToe>(*game), boards, policies, depth + 1);
-    
-    // Backtrack
-    boards.pop_back();
-    policies.pop_back();
-    
-    // Undo the move (don't really need this since we use a copy for recursion)
-    if (depth < 8) {  // No need to undo on the last move
-      game->UndoMove(move);
-    }
-  }
-}
-
-void runComprehensiveTraining(std::shared_ptr<NeuralNetwork> network) {
+void runComprehensiveTraining(std::shared_ptr<NeuralNetwork> network, Config config) {
   std::cout << "\n==== Comprehensive Tic-tac-toe Training ====" << std::endl;
   std::cout << "Generating all possible valid games..." << std::endl;
   
   // Generate all possible games
-  std::vector<GameEpisode> all_episodes;
-  std::vector<torch::Tensor> boards;
-  std::vector<std::vector<float>> policies;
-  
-  auto game = std::make_shared<TicTacToe>();
-  GenerateAllTicTacToeGames(all_episodes, game, boards, policies);
-  
-  std::cout << "Generated " << all_episodes.size() << " complete games" << std::endl;
+  GamePositions all_episodes = GenerateAllTicTacToeGames();
   
   // Select CUDA device
   torch::Device device(torch::kCUDA, 0);
@@ -260,20 +163,18 @@ void runComprehensiveTraining(std::shared_ptr<NeuralNetwork> network) {
   std::vector<torch::Tensor> all_policies;
   std::vector<float> all_values;
   
-  for (const auto& episode : all_episodes) {
-    for (size_t i = 0; i < episode.boards.size(); i++) {
-      all_boards.push_back(episode.boards[i]);
-      
-      // Create policy tensor
-      all_policies.push_back(torch::from_blob(
-          const_cast<float*>(episode.policies[i].data()),
-          {TicTacToe::kNumActions}, 
-          torch::kFloat32).clone());
-      
-      // Add value targets (adjusted for player perspective)
-      float perspective = (i % 2 == 0) ? 1.0f : -1.0f;
-      all_values.push_back(episode.outcome * perspective);
-    }
+  for (const auto& episode : all_episodes.boards) {
+    all_boards.push_back(episode);
+    
+    // Create policy tensor
+    all_policies.push_back(torch::from_blob(
+        const_cast<float*>(all_episodes.policies[&episode - &all_episodes.boards[0]].data()),
+        {TicTacToe::kNumActions}, 
+        torch::kFloat32).clone());
+    
+    // Add value targets (adjusted for player perspective)
+    float perspective = (all_episodes.values[&episode - &all_episodes.boards[0]] == 1.0f) ? 1.0f : -1.0f;
+    all_values.push_back(all_episodes.values[&episode - &all_episodes.boards[0]] * perspective);
   }
   
   // Stack tensors into batches and move to GPU
@@ -308,50 +209,40 @@ void runComprehensiveTraining(std::shared_ptr<NeuralNetwork> network) {
   // Configure optimizer
   torch::optim::Adam optimizer(
       network->parameters(),
-      torch::optim::AdamOptions(0.001).weight_decay(0.0001));
+      torch::optim::AdamOptions(0.01).weight_decay(0.0001));
   
   // Train for multiple epochs
-  int num_epochs = 256;
+  int num_epochs = config.num_epochs;
   std::cout << "\nTraining for " << num_epochs << " epochs on all possible positions..." << std::endl;
   
-  int batch_size = 1;
+  int batch_size = config.training_batch_size;
   int num_batches = (states_batch.sizes()[0] + batch_size - 1) / batch_size;
-  
+  float gamma_alpha = config.gamma_alpha;
+  float gamma_beta = 1-gamma_alpha;
+
   for (int epoch = 0; epoch < num_epochs; epoch++) {
     float epoch_policy_loss = 0.0f;
     float epoch_value_loss = 0.0f;
     float epoch_total_loss = 0.0f;
-    
-    // Create random indices for this epoch
     auto indices = torch::randperm(states_batch.sizes()[0], device);
     
     for (int batch = 0; batch < num_batches; batch++) {
-      // Zero gradients
       optimizer.zero_grad();
       
       // Get mini-batch
       int start_idx = batch * batch_size;
       int end_idx = std::min(start_idx + batch_size, static_cast<int>(states_batch.sizes()[0]));
       auto batch_indices = indices.slice(0, start_idx, end_idx);
-      
+    
       auto batch_states = states_batch.index_select(0, batch_indices);
       auto batch_policies = policy_batch.index_select(0, batch_indices);
       auto batch_values = values.index_select(0, batch_indices);
-      
-      // Forward pass
       auto [policy_output, value_output] = network->forward(batch_states);
-      
-      // Use cross-entropy loss for policy
       torch::Tensor log_softmax_policy = torch::log_softmax(policy_output, 1);
       torch::Tensor policy_loss = -torch::sum(batch_policies * log_softmax_policy) / batch_policies.size(0);
-      
-      // MSE loss for value
       torch::Tensor value_loss = torch::mse_loss(value_output, batch_values);
-      
-      // Combined loss (weight policy higher)
-      torch::Tensor total_loss = 5.0 * policy_loss + value_loss;
-      
-      // Backward pass and optimization
+      torch::Tensor total_loss = gamma_alpha * policy_loss + gamma_beta * value_loss;
+
       total_loss.backward();
       optimizer.step();
       
@@ -424,7 +315,6 @@ void runComprehensiveTraining(std::shared_ptr<NeuralNetwork> network) {
   
   // Move network back to CPU before creating the trainer
   network->to(torch::kCPU);
-  Config config;
   Trainer trainer(network, config);
 
   // Store and display evaluation results
@@ -447,10 +337,10 @@ void runComprehensiveTraining(std::shared_ptr<NeuralNetwork> network) {
 }
 
 int main(int argc, char** argv) {
-  Config config;
+  Config config = Config::ParseCommandLine(argc, argv);
   std::shared_ptr<NeuralNetwork> network = std::make_shared<NeuralNetwork>(config);
   // Train on all possible games
-  runComprehensiveTraining(network);
+  runComprehensiveTraining(network, config);
   
   return 0;
 }

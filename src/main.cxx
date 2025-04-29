@@ -34,26 +34,31 @@ int main(int argc, char** argv) {
       /// for the self play, we need to clone the network to the cpu - potential source of error.
       auto best_clone = best_network->NetworkClone(torch::kCPU);
       auto network_to_train = std::dynamic_pointer_cast<NeuralNetwork>(best_clone);
-      SelfPlay<TicTacToe> self_play( best_network, config, current_temperature );
+      SelfPlay<TicTacToe> self_play(best_network, config, current_temperature);
       Trainer trainer(network_to_train, config);
  
       /// start the self play and collect the episodes.
       logger.LogFormat("Starting iteration {}/{}", iter + 1, config.num_iterations);
-      std::vector<GameEpisode> episodes;
+      GamePositions positions;
       if (config.num_threads > 1) {
-        episodes = self_play.ExecuteEpisodesParallel();
+        positions = self_play.ExecuteEpisodesParallel();
       } else {
-        episodes.reserve(config.episodes_per_iteration);
-        for (int i = 0; i < config.episodes_per_iteration; ++i) {
-          episodes.push_back(self_play.ExecuteEpisode());
-        }
+        positions = self_play.ExecuteEpisode();
       }
-      logger.Log("Completed self-play episodes generation.");
+      logger.LogFormat("Collected {} game positions from self-play", positions.boards.size());
 
       /// was the self play good?
-      float exploration_metric = CalculateAverageExplorationMetric(episodes);
+      float exploration_metric = 0.0f;
+      for (const auto& policy : positions.policies) {
+        exploration_metric += NeuralNetwork::CalculatePolicyEntropy(policy);
+      }
+      if (!positions.policies.empty()) {
+        exploration_metric /= positions.policies.size();
+        logger.LogFormat("Average exploration metric: {:.4f}", exploration_metric);
+      }
+
       /// train - then accept/reject
-      trainer.Train(episodes);
+      trainer.Train(positions);
       EvaluationStats evaluation_stats = trainer.EvaluateAgainstNetwork(best_network);
       bool network_accepted = trainer.AcceptOrRejectNewNetwork(best_network, evaluation_stats);
       if (network_accepted) {

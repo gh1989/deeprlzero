@@ -127,10 +127,10 @@ void TicTacToe::UndoMove(int move) {
 }
 
 template <typename GameType>
-GameEpisode SelfPlay<GameType>::ExecuteEpisode() {
+GamePositions SelfPlay<GameType>::ExecuteEpisode() {
   network_->eval();
 
-  GameEpisode episode;
+  GamePositions positions;
   MCTS mcts(network_, config_);
 
   auto game = std::make_unique<GameType>();
@@ -145,61 +145,81 @@ GameEpisode SelfPlay<GameType>::ExecuteEpisode() {
     }
 
     std::vector<float> policy = mcts.GetActionProbabilities(game.get(), current_temperature_);
-    episode.boards.push_back(board);
-    episode.policies.push_back(policy);
+    positions.boards.push_back(board);
+    positions.policies.push_back(policy);
 
     int move = mcts.SelectMove(game.get(), current_temperature_);
     game->MakeMove(move);
     mcts.ResetRoot();  // Reset the tree for the next move
   }
 
-  episode.outcome = game->GetGameResult();
-  return episode;
+  // Set the values based on game outcome
+  float outcome = game->GetGameResult();
+  for (size_t i = 0; i < positions.boards.size(); i++) {
+    // Flip value for player 2's perspective
+    positions.values.push_back((i % 2 == 0) ? outcome : -outcome);
+  }
+
+  return positions;
 }
 
 template <typename GameType>
-std::vector<GameEpisode> SelfPlay<GameType>::ExecuteEpisodesParallel() {
-  std::vector<GameEpisode> episodes;
-  episodes.reserve(config_.episodes_per_iteration);
-
-  // Use configured thread count, with sensible limits
+GamePositions SelfPlay<GameType>::ExecuteEpisodesParallel() {
+  // First, run a sample episode to estimate position count
+  auto sample = ExecuteEpisode();
+  int estimated_positions_per_episode = sample.size();
+  
+  // Calculate total threads and distribution
   const int num_threads = std::min(config_.num_threads, 
                                   std::max(1, config_.episodes_per_iteration));
-  
-  // Calculate base episodes per thread and remainder
   const int episodes_per_thread = config_.episodes_per_iteration / num_threads;
   const int remaining_episodes = config_.episodes_per_iteration % num_threads;
-
-  std::vector<std::future<std::vector<GameEpisode>>> futures;
-
-  // Start threads with the work distribution
+  
+  // Pre-compute episode assignments and positions
+  std::vector<int> thread_episode_counts(num_threads);
+  std::vector<int> position_offsets(num_threads);
+  int total_estimated_positions = 0;
+  
   for (int i = 0; i < num_threads; ++i) {
-    // Give one extra episode to some threads to handle the remainder
-    int thread_episodes = episodes_per_thread + (i < remaining_episodes ? 1 : 0);
-    
-    futures.push_back(
-        std::async(std::launch::async, [this, thread_episodes]() {
-          std::vector<GameEpisode> thread_episodes_result;
-          thread_episodes_result.reserve(thread_episodes);
-          for (int j = 0; j < thread_episodes; ++j) {
-            thread_episodes_result.push_back(ExecuteEpisode());
-          }
-          return thread_episodes_result;
-        }));
+    thread_episode_counts[i] = episodes_per_thread + (i < remaining_episodes ? 1 : 0);
+    position_offsets[i] = total_estimated_positions;
+    total_estimated_positions += thread_episode_counts[i] * estimated_positions_per_episode;
   }
-
-  // Collect results
-  for (auto& future : futures) {
-    auto thread_episodes = future.get();
-    episodes.insert(episodes.end(), thread_episodes.begin(),
-                    thread_episodes.end());
+  
+  // Pre-allocate the result vectors with generous padding
+  GamePositions all_positions;
+  all_positions.boards.reserve(total_estimated_positions * 1.1);
+  all_positions.policies.reserve(total_estimated_positions * 1.1);
+  all_positions.values.reserve(total_estimated_positions * 1.1);
+  
+  // Store thread results separately to avoid contention
+  std::vector<GamePositions> thread_results(num_threads);
+  
+  // Launch threads
+  std::vector<std::thread> threads;
+  for (int i = 0; i < num_threads; ++i) {
+    threads.push_back(std::thread([this, i, thread_episodes = thread_episode_counts[i], 
+                                  &thread_results]() {
+      for (int j = 0; j < thread_episodes; ++j) {
+        thread_results[i].Append(ExecuteEpisode());
+      }
+    }));
   }
-
-  return episodes;
+  
+  // Wait for all threads to complete
+  for (auto& thread : threads) {
+    thread.join();
+  }
+  
+  // Merge results sequentially to avoid allocation thrashing
+  for (int i = 0; i < num_threads; ++i) {
+    all_positions.Append(thread_results[i]);
+  }
+  
+  return all_positions;
 }
 
-template GameEpisode SelfPlay<TicTacToe>::ExecuteEpisode();
-template std::vector<GameEpisode>
-SelfPlay<TicTacToe>::ExecuteEpisodesParallel();
+template GamePositions SelfPlay<TicTacToe>::ExecuteEpisode();
+template GamePositions SelfPlay<TicTacToe>::ExecuteEpisodesParallel();
 
 }  

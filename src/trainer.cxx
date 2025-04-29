@@ -9,9 +9,9 @@
 
 namespace deeprlzero {
 
-void Trainer::Train(const std::vector<GameEpisode>& episodes) {
-  if (episodes.empty()) {
-    throw std::runtime_error("No episodes to train on");
+void Trainer::Train(const GamePositions& positions) {
+  if (positions.boards.empty()) {
+    throw std::runtime_error("No positions to train on");
   }
 
   // Save initial parameters for comparison
@@ -20,33 +20,24 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
     initial_params.push_back(param.clone());
   }
 
-  network_->to(torch::kCUDA);
+  // Move to GPU
+  torch::Device device(torch::kCUDA);
+  network_->to(device);
   network_->train();
 
-  // Prepare training data
-  std::vector<torch::Tensor> all_boards;
-  std::vector<float> all_policies;
-  std::vector<float> all_values;
-
-  for (const auto& episode : episodes) {
-    all_boards.insert(all_boards.end(), episode.boards.begin(),
-                      episode.boards.end());
-    for (const auto& policy : episode.policies) {
-      all_policies.insert(all_policies.end(), policy.begin(), policy.end());
-    }
-
-    // Use the final outcome for all positions in this episode
-    for (size_t i = 0; i < episode.boards.size(); ++i) {
-      // Flip sign for player 2's perspective
-      float value = (i % 2 == 0) ? episode.outcome : -episode.outcome;
-      all_values.push_back(value);
-    }
+  // Convert policies to tensor
+  std::vector<torch::Tensor> policy_tensors;
+  for (const auto& policy : positions.policies) {
+    policy_tensors.push_back(torch::from_blob(
+        const_cast<float*>(policy.data()), 
+        {static_cast<int64_t>(policy.size())},
+        torch::kFloat32).clone());
   }
 
-  auto states = torch::stack(torch::TensorList(all_boards)).to(torch::kCUDA);
-  auto policies =
-      torch::tensor(all_policies).reshape({-1, config_.action_size}).to(torch::kCUDA);
-  auto values = torch::tensor(all_values).reshape({-1, 1}).to(torch::kCUDA);
+  // Stack tensors and move to GPU
+  auto states = torch::stack(positions.boards).to(device);
+  auto policies = torch::stack(policy_tensors).to(device);
+  auto values = torch::tensor(positions.values).reshape({-1, 1}).to(device);
 
   ///network_->ValidateGradientFlow(states, policies, values);
 
@@ -57,11 +48,11 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
     auto outputs = network_->forward(states);
     auto policy_preds = outputs.first;
     auto value_preds = outputs.second;
-    ///network_->ValidateGradientFlow(states, policies, values);
+    
     auto loss_policy = -torch::mean(
         torch::sum(policies * torch::log_softmax(policy_preds, 1), 1));
     auto loss_value = torch::mse_loss(value_preds, values);
-    auto total_loss = loss_policy + loss_value;
+    auto total_loss = loss_policy + loss_value;  // Weight policy loss higher
 
     total_loss.backward();
     optimizer_->step();
@@ -82,6 +73,9 @@ void Trainer::Train(const std::vector<GameEpisode>& episodes) {
   
   logger.LogFormat("Parameter changes after training: total_diff={:.6f}, changed={}", 
                   total_diff, params_changed ? "YES" : "NO");
+  
+  // Move back to CPU for compatibility with other parts of the code
+  network_->to(torch::kCPU);
 }
 
 

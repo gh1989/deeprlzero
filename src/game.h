@@ -77,10 +77,29 @@ class TicTacToe : public Game {
   
 };
 
-struct GameEpisode {
-  std::vector<torch::Tensor> boards;           
-  std::vector<std::vector<float>> policies;      
-  float outcome;                                 
+struct GamePositions {
+  std::vector<torch::Tensor> boards;
+  std::vector<std::vector<float>> policies;
+  std::vector<float> values;
+  
+  // Helper to get size
+  size_t size() const {
+    return boards.size();
+  }
+  
+  // Helper to clear all arrays
+  void clear() {
+    boards.clear();
+    policies.clear();
+    values.clear();
+  }
+  
+  // Helper to append another GamePositions
+  void Append(const GamePositions& other) {
+    boards.insert(boards.end(), other.boards.begin(), other.boards.end());
+    policies.insert(policies.end(), other.policies.begin(), other.policies.end());
+    values.insert(values.end(), other.values.begin(), other.values.end());
+  }
 };
 
 template <typename GameType>
@@ -94,8 +113,11 @@ class SelfPlay {
     network_->eval();
   }
 
-GameEpisode ExecuteEpisode();
-  std::vector<GameEpisode> ExecuteEpisodesParallel(); 
+  // Execute a single episode and return the positions
+  GamePositions ExecuteEpisode();
+  
+  // Execute multiple episodes in parallel and merge the results
+  GamePositions ExecuteEpisodesParallel();
 
  private:
   std::shared_ptr<NeuralNetwork> network_;
@@ -104,9 +126,9 @@ GameEpisode ExecuteEpisode();
   std::mt19937 rng_{std::random_device{}()};  
 };
 
-std::vector<GameEpisode> AllEpisodes();
+std::vector<GamePositions> AllEpisodes();
 
-inline float CalculateAverageExplorationMetric(const std::vector<GameEpisode>& episodes) {
+inline float CalculateAverageExplorationMetric(const std::vector<GamePositions>& episodes) {
   if (episodes.empty()) {
     return 0.0f;
   }

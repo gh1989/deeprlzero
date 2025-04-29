@@ -55,7 +55,7 @@ class Trainer {
                                   const torch::Tensor& policy_targets);
   torch::Tensor ComputeValueLoss(const torch::Tensor& value_preds,
                                  const torch::Tensor& value_targets);
-  void Train(const std::vector<GameEpisode>& examples);
+  void Train(const GamePositions& examples);
 
   int IterationsSinceImprovement() const { return iterations_since_improvement_; }
   std::shared_ptr<NeuralNetwork> GetTrainedNetwork() const { return network_; }

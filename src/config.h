@@ -27,7 +27,7 @@ class Config {
   int action_size = 9;  // Total number of possible actions
   int mcts_batch_size = 64;
   float gamma_alpha = 0.3f;
-  float gamma_beta = 1.0f;
+  float gamma_beta = 0.7f;
 
   // Training configuration
   int training_batch_size = 2048;
@@ -91,6 +91,10 @@ class Config {
         config.num_threads = std::stoi(argv[++i]);
       } else if (arg == "-a" || arg == "--acceptance-threshold") {
         config.acceptance_threshold = std::stof(argv[++i]);
+      } else if (arg == "-g" || arg == "--gamma-alpha") {
+        config.gamma_alpha = std::stof(argv[++i]);
+      } else if (arg == "-o" || arg == "--training-batch-size") {
+        config.training_batch_size = std::stoi(argv[++i]);
       } else if (arg == "-h" || arg == "--help") {
         PrintUsage();
         exit(0);
