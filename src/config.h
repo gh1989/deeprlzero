@@ -14,7 +14,7 @@ class Config {
   int num_residual_blocks = 1;
   float learning_rate = 1e-3;
   float prior_alpha = 0.75f;
-
+  float weight_decay = 1e-4;
   // Temperature annealing
   float initial_temperature = 5.0f;
   float min_temperature = 0.1f;

@@ -68,6 +68,9 @@ class TicTacToe : public Game {
     return result;
   }
 
+  std::string GetBoardString() const;
+  void SetFromString(const std::string& boardStr, int player);
+
  private:
   std::array<std::array<int, kBoardSize>, kBoardSize> board_;
   int current_player_;

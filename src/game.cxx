@@ -126,6 +126,35 @@ void TicTacToe::UndoMove(int move) {
   current_player_ = -current_player_;  // Switch back to previous player
 }
 
+std::string TicTacToe::GetBoardString() const {
+  std::string result;
+  for (int i = 0; i < kBoardSize; ++i) {
+    for (int j = 0; j < kBoardSize; ++j) {
+      if (board_[i][j] == 1) result += "1";
+      else if (board_[i][j] == -1) result += "2";  // Using 2 for player -1
+      else result += "0";
+    }
+  }
+  return result;
+}
+
+void TicTacToe::SetFromString(const std::string& boardStr, int player) {
+  if (boardStr.size() != kBoardSize * kBoardSize) {
+    throw std::invalid_argument("Invalid board string length");
+  }
+  
+  current_player_ = player;
+  
+  for (int i = 0; i < kBoardSize; ++i) {
+    for (int j = 0; j < kBoardSize; ++j) {
+      char c = boardStr[i * kBoardSize + j];
+      if (c == '1') board_[i][j] = 1;
+      else if (c == '2') board_[i][j] = -1;  // 2 represents player -1
+      else board_[i][j] = 0;
+    }
+  }
+}
+
 template <typename GameType>
 GamePositions SelfPlay<GameType>::ExecuteEpisode() {
   network_->eval();
