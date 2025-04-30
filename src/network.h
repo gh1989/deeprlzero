@@ -4,10 +4,24 @@
 #include <memory>
 #include <mutex>
 #include <torch/torch.h>
+#include <vector>
 
 #include "config.h"
 
 namespace deeprlzero {
+
+// Residual block as a separate module
+class ResidualBlock : public torch::nn::Module,  public std::enable_shared_from_this<ResidualBlock>  {
+ public:
+  ResidualBlock(int channels);
+  torch::Tensor forward(torch::Tensor x);
+
+ private:
+  torch::nn::Conv2d conv1{nullptr};
+  torch::nn::BatchNorm2d bn1{nullptr};
+  torch::nn::Conv2d conv2{nullptr};
+  torch::nn::BatchNorm2d bn2{nullptr};
+};
 
 class NeuralNetwork : public torch::nn::Module, public std::enable_shared_from_this<NeuralNetwork> {
  public:
@@ -20,8 +34,6 @@ class NeuralNetwork : public torch::nn::Module, public std::enable_shared_from_t
   void InitializeWeights();
   const torch::Tensor& GetCachedPolicy() const { return cached_policy_; }
   const torch::Tensor& GetCachedValue() const { return cached_value_; }
-  std::shared_ptr<NeuralNetwork> NetworkClone(const torch::Device& device) const;
-  void reset();
   void ValidateGradientFlow(const torch::Tensor& input,
                             const torch::Tensor& target_policy,
                             const torch::Tensor& target_value); 
@@ -29,11 +41,13 @@ class NeuralNetwork : public torch::nn::Module, public std::enable_shared_from_t
   static std::shared_ptr<NeuralNetwork> CreateInitialNetwork(const Config& config);
   static std::shared_ptr<NeuralNetwork> LoadBestNetwork(const Config& config);
   static void SaveBestNetwork(std::shared_ptr<NeuralNetwork> network, const Config& config);
+  std::shared_ptr<NeuralNetwork> NetworkClone(const torch::Device& device) const;
   static float CalculatePolicyEntropy(const std::vector<float>& policy);
 
  private:
   torch::nn::Conv2d conv{nullptr};
   torch::nn::BatchNorm2d batch_norm{nullptr};
+  std::vector<std::shared_ptr<ResidualBlock>> res_blocks;
   torch::nn::Linear policy_fc{nullptr};
   torch::nn::Linear value_fc{nullptr};
   torch::Tensor cached_policy_;

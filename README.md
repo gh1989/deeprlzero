@@ -6,9 +6,20 @@ cmake ..
 make
 ```
 
+Base Model (optional):
+```
+./bin/explorer --residual-blocks 2 --filters 128 --epochs 1024 --learning-rate 0.001 --training-batch-size 512 --games 1024 --eval-games 50 --simulations 128 -g 0.88 --weight-decay 0.0005 
+```
+
 Run:
 ```
-./bin/train_deeprlzero --games 100 --threads 18 --learning-rate 0.001 --simulations 32 --acceptance-threshold 0.55 --eval-games 10 --iterations 1000
+./bin/train_deeprlzero --games 1024 --threads 8 --learning-rate 0.001 --simulations 32 --acceptance-threshold 0.55 --eval-games 256 --itera
+tions 128 --gamma-alpha 0.88 --weight-decay 0.0001
+```
+
+Play:
+```
+./bin/play --model deeprlzero_model.pt
 ```
 
 Options:

@@ -109,8 +109,8 @@ template <typename GameType>
 class SelfPlay {
   static_assert(std::is_base_of<Game, GameType>::value, "GameType must derive from Game");
  public:
-   SelfPlay(std::shared_ptr<NeuralNetwork> network, const Config& config, float temperature)
-    : config_(config), current_temperature_(temperature) {
+   SelfPlay(std::shared_ptr<NeuralNetwork> network, const Config& config)
+    : config_(config) {
     network_ = std::dynamic_pointer_cast<NeuralNetwork>(network->NetworkClone(torch::kCPU));
     network_->to(torch::kCPU);
     network_->eval();
@@ -125,7 +125,6 @@ class SelfPlay {
  private:
   std::shared_ptr<NeuralNetwork> network_;
   const Config& config_;
-  float current_temperature_;
   std::mt19937 rng_{std::random_device{}()};  
 };
 

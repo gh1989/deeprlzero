@@ -23,15 +23,6 @@ inline void ParallelFor(int num_iterations, const std::function<void(int)>& func
 #endif
 }
 
-template <typename T, typename Factory>
-T &GetThreadLocalInstance(Factory create) {
-  thread_local std::unique_ptr<T> instance;
-  if (!instance) {
-    instance.reset(create());
-  }
-  return *instance;
-}
-
 }
 
 #endif

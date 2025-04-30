@@ -4,9 +4,107 @@
 #include <filesystem>
 #include <cassert>
 
+/*
+Network Arch
+ ─────────────────────┐
+│     Input (3×3×3)   │  3 channels: player pieces, opponent pieces, turn indicator
+└──────────┬──────────┘
+           ▼
+┌─────────────────────┐
+│  Conv2D (3×3, pad=1)│  Input channels: 3, Output channels: num_filters
+└──────────┬──────────┘
+           ▼
+┌─────────────────────┐
+│    BatchNorm2D      │
+└──────────┬──────────┘
+           ▼
+┌─────────────────────┐
+│       ReLU          │
+└──────────┬──────────┘
+           ▼
+┌─────────────────────┐
+│                     │
+│   Residual Blocks   │  num_residual_blocks (configurable)
+│                     │
+└──────────┬──────────┘
+           ▼
+┌─────────────────────┐
+│     Flatten         │  Reshape to (batch_size, num_filters * 9)
+└───────┬──────┬──────┘
+        │      │
+        ▼      ▼
+┌───────────┐  ┌───────────┐
+│ Policy FC │  │ Value FC  │
+│  Linear   │  │  Linear   │
+└─────┬─────┘  └─────┬─────┘
+      │              │
+      ▼              ▼
+┌───────────┐  ┌───────────┐
+│ Logits    │  │   Tanh    │
+│ (9 moves) │  │           │
+└───────────┘  └───────────┘
+
+Residual Block
+        ┌───────────────────┐
+Input ──┤                   │
+        │                   │
+        ▼                   │
+┌─────────────────┐         │
+│  Conv2D (3×3)   │         │
+└────────┬────────┘         │
+         ▼                  │
+┌─────────────────┐         │
+│   BatchNorm2D   │         │
+└────────┬────────┘         │
+         ▼                  │
+┌─────────────────┐         │
+│      ReLU       │         │
+└────────┬────────┘         │
+         ▼                  │
+┌─────────────────┐         │
+│  Conv2D (3×3)   │         │
+└────────┬────────┘         │
+         ▼                  │
+┌─────────────────┐         │
+│   BatchNorm2D   │         │
+└────────┬────────┘         │
+         │                  │
+         └────────┬─────────┘
+                  ▼
+                Output
+*/
+
 namespace deeprlzero {
 
-NeuralNetwork::NeuralNetwork(const Config& config) {
+ResidualBlock::ResidualBlock(int channels) {
+  conv1 = register_module("conv1", torch::nn::Conv2d(torch::nn::Conv2dOptions(channels, channels, 3).padding(1)));
+  bn1 = register_module("bn1", torch::nn::BatchNorm2d(channels));
+  conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(channels, channels, 3).padding(1)));
+  bn2 = register_module("bn2", torch::nn::BatchNorm2d(channels));
+  
+  // Initialize weights with Kaiming normal
+  for (auto& p : parameters()) {
+    if (p.dim() > 1) {
+      // Conv weights
+      torch::nn::init::kaiming_normal_(p);
+    } else if (p.dim() == 1) {
+      // BatchNorm weights/biases
+      if (p.size(0) == channels) {
+        torch::nn::init::constant_(p, 0.1);  // Batch norm weights
+      } else {
+        torch::nn::init::zeros_(p);  // Bias terms
+      }
+    }
+  }
+}
+
+torch::Tensor ResidualBlock::forward(torch::Tensor x) {
+  auto out = torch::relu(bn1(conv1(x)));
+  out = bn2(conv2(out));
+  return x + out;
+}
+
+NeuralNetwork::NeuralNetwork(const Config& config) : config_(config) {
   /// pack in the asserts
   assert(config.num_filters > 0 );
   assert(config.action_size > 0 );
@@ -15,23 +113,30 @@ NeuralNetwork::NeuralNetwork(const Config& config) {
   /// also input channels is always three, ours, theirs and a whole channel for the turn.
   const auto board_size = 3 * 3;  
   const auto input_channels = 3;
+  board_size_ = board_size;
 
   /// input channels, output channels, kernel size
-  conv = register_module( "conv", torch::nn::Conv2d( torch::nn::Conv2dOptions(input_channels, config.num_filters, 3).padding(1)));
+  conv = register_module("conv", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels, config.num_filters, 3).padding(1)));
   /// batch normalization
   batch_norm = register_module("batch_norm", torch::nn::BatchNorm2d(config.num_filters));
 
+  // Resblocks
+  for (int i = 0; i < config_.num_residual_blocks; i++) {
+    res_blocks.push_back(register_module(
+        "res_block_" + std::to_string(i), 
+        std::make_shared<ResidualBlock>(config.num_filters)));
+  }
+
   /// output policy which is the distribution over the actions, in tic-tac-toe this is obviously 9
-  policy_fc = register_module( "policy_fc", torch::nn::Linear(config.num_filters * board_size, config.action_size));
+  policy_fc = register_module("policy_fc", torch::nn::Linear(config.num_filters * board_size, config.action_size));
   /// output value which is just a float
   value_fc = register_module("value_fc",  torch::nn::Linear(config.num_filters * board_size, 1));
 
-  config_ = config;
   InitializeWeights();
 }
 
 std::pair<torch::Tensor, torch::Tensor> NeuralNetwork::forward( torch::Tensor x) {
-  std::lock_guard<std::mutex> lock(*forward_mutex_);
+  std::lock_guard<std::mutex> lock(*forward_mutex_); // :(
   return forward_impl(x);
 }
 
@@ -40,6 +145,9 @@ std::pair<torch::Tensor, torch::Tensor> NeuralNetwork::forward_impl(
   x = conv(x);
   x = batch_norm(x);
   x = torch::relu(x);
+  for (const auto& block : res_blocks) {
+    x = block->forward(x);
+  }
   auto batch_size = x.size(0);
   x = x.reshape({batch_size, -1});
   auto policy_logits = policy_fc(x);
@@ -70,56 +178,25 @@ void NeuralNetwork::MoveToDevice(const torch::Device& device) {
   this->to(device);
 }
 
-void NeuralNetwork::reset() {
-  int64_t input_channels = 3; 
-  int64_t num_actions = 9;  // specific to tic tac toe
-  int64_t num_filters = 32;    
-
-  if (conv) {
-    input_channels = conv->options.in_channels();
-    num_filters = conv->options.out_channels();
-  }
-
-  if (policy_fc) {
-    num_actions = policy_fc->options.out_features();
-  }
-
-  conv = register_module( "conv", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels, num_filters, 3).padding(1)));
-  batch_norm = register_module("batch_norm", torch::nn::BatchNorm2d(num_filters));
-  policy_fc = register_module( "policy_fc", torch::nn::Linear(num_filters * board_size_, num_actions));
-  value_fc = register_module("value_fc", torch::nn::Linear(num_filters * board_size_, 1));
-
-  InitializeWeights();
-}
-
 std::shared_ptr<NeuralNetwork> NeuralNetwork::NetworkClone(const torch::Device& device) const {
-  // Create a new network with the same config
   auto cloned_net = std::make_shared<NeuralNetwork>(config_);
-  // Ensure the cloned network has the same structure but different parameter memory
+  
   torch::NoGradGuard no_grad;
-  // Get parameters from both networks
   auto this_params = this->named_parameters(true);
   auto clone_params = cloned_net->named_parameters(true);
   
-  // Deep copy each parameter tensor to the cloned network
   for (const auto& param : this_params) {
     const auto& name = param.key();
     const auto& tensor = param.value();
-    
-    // Create a new tensor with the same data but different memory
     auto new_tensor = tensor.clone().detach();
-    
-    // Set the parameter in the cloned network - using at() instead of find()
     try {
       clone_params[name].copy_(new_tensor);
     } catch (const std::exception& e) {
-      throw std::runtime_error("Parameter not found in cloned network: " + name);
+      throw std::runtime_error("Parameter not found in cloned network: " + name + ": " + e.what());
     }
   }
   
-  // Move to the desired device
   cloned_net->to(device);
-  
   return cloned_net;
 }
 

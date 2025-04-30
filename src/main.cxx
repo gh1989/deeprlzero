@@ -29,12 +29,11 @@ int main(int argc, char** argv) {
       NeuralNetwork::SaveBestNetwork(best_network, config);
   }
     
-  float current_temperature = config.initial_temperature;
   for (int iter = 0; iter < config.num_iterations; ++iter) {
       /// for the self play, we need to clone the network to the cpu - potential source of error.
       auto best_clone = best_network->NetworkClone(torch::kCPU);
       auto network_to_train = std::dynamic_pointer_cast<NeuralNetwork>(best_clone);
-      SelfPlay<TicTacToe> self_play(best_network, config, current_temperature);
+      SelfPlay<TicTacToe> self_play(best_network, config);
       Trainer trainer(network_to_train, config);
  
       /// start the self play and collect the episodes.
@@ -65,9 +64,6 @@ int main(int argc, char** argv) {
         best_network = std::dynamic_pointer_cast<NeuralNetwork>(trainer.GetTrainedNetwork()->NetworkClone(torch::kCPU));
         NeuralNetwork::SaveBestNetwork(best_network, config);
       }
-
-      ///there's no temperature update in the trainer.
-      current_temperature = trainer.UpdateTemperature(current_temperature);
 
       /// every 5 iterations evaluation against random and 
       /// log the results

@@ -375,18 +375,19 @@ void runComprehensiveTraining(std::shared_ptr<NeuralNetwork> network, Config con
   
   // Train the network
   network->train();
-  
+  network->NetworkClone(device);
+
   // 1. Set higher weight for policy loss
-  float gamma_alpha = 0.8;  // 80% weight on policy
+  float gamma_alpha = config.gamma_alpha;
   float gamma_beta = 1-gamma_alpha;
 
   // 2. Use a fixed higher learning rate
   torch::optim::Adam optimizer(
       network->parameters(),
-      torch::optim::AdamOptions(0.001).weight_decay(config.weight_decay));
+      torch::optim::AdamOptions(config.learning_rate).weight_decay(config.weight_decay));
   
   // 3. Increase batch size
-  int batch_size = 128;  // Use larger batches
+  int batch_size = config.training_batch_size;  // Use larger batches
   int num_batches = (states_batch.sizes()[0] + batch_size - 1) / batch_size;
 
   // 4. Add policy visualization before/after training
@@ -519,11 +520,8 @@ void runComprehensiveTraining(std::shared_ptr<NeuralNetwork> network, Config con
 
   // Store and display evaluation results
   auto eval_stats = trainer.EvaluateAgainstRandom();
-  std::cout << "\nEvaluation Against Random Player" << std::endl;
-  std::cout << "Wins: " << eval_stats.win_rate << std::endl;
-  std::cout << "Losses: " << eval_stats.loss_rate << std::endl;
-  std::cout << "Draws: " << eval_stats.draw_rate << std::endl;
-  
+  std::cout << eval_stats.WinStats();
+
   // Save the comprehensively trained model
   try {
     std::filesystem::create_directories("models");
@@ -570,6 +568,7 @@ void runComprehensiveTraining(std::shared_ptr<NeuralNetwork> network, Config con
   }
 
   // Verify a few policies in the training tensor match the original data
+  /*
   for (int i = 0; i < std::min(3, static_cast<int>(all_episodes.boards.size())); i++) {
     std::cout << "Position " << i << " - Original vs Tensor:" << std::endl;
     for (int j = 0; j < 9; j++) {
@@ -588,6 +587,7 @@ void runComprehensiveTraining(std::shared_ptr<NeuralNetwork> network, Config con
       std::cout << "  WARNING: Policy doesn't sum to 1.0!" << std::endl;
     }
   }
+  */
 }
 
 int main(int argc, char** argv) {

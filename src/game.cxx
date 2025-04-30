@@ -166,15 +166,14 @@ GamePositions SelfPlay<GameType>::ExecuteEpisode() {
 
   while (!game->IsTerminal()) {
     torch::Tensor board = game->GetCanonicalBoard();
-    
-    mcts.AddDirichletNoiseToRoot(game.get());
-
+    ///actually let's not.
+    //mcts.AddDirichletNoiseToRoot(game.get());
     for (int i = 0; i < config_.num_simulations; ++i) {
       mcts.Search(game.get(), mcts.GetRoot());
     }
 
     // Use a smarter temperature approach that decreases as the game progresses
-    float move_temperature = current_temperature_;
+    float move_temperature = config_.self_play_temperature;
     int move_number = positions.boards.size();
 
     std::vector<float> policy = mcts.GetActionProbabilities(game.get(), move_temperature);
@@ -183,13 +182,12 @@ GamePositions SelfPlay<GameType>::ExecuteEpisode() {
 
     int move = mcts.SelectMove(game.get(), move_temperature);
     game->MakeMove(move);
-    mcts.ResetRoot();  // Reset the tree for the next move
+    mcts.ResetRoot();  
   }
 
-  // Set the values based on game outcome
+  // Set the values based on game outcome. Flip value for player 2's perspective
   float outcome = game->GetGameResult();
   for (size_t i = 0; i < positions.boards.size(); i++) {
-    // Flip value for player 2's perspective
     positions.values.push_back((i % 2 == 0) ? outcome : -outcome);
   }
 
@@ -222,9 +220,10 @@ GamePositions SelfPlay<GameType>::ExecuteEpisodesParallel() {
   
   // Pre-allocate the result vectors with generous padding
   GamePositions all_positions;
-  all_positions.boards.reserve(total_estimated_positions * 1.1);
-  all_positions.policies.reserve(total_estimated_positions * 1.1);
-  all_positions.values.reserve(total_estimated_positions * 1.1);
+  const float padding_factor = 1.25;
+  all_positions.boards.reserve(total_estimated_positions * padding_factor);
+  all_positions.policies.reserve(total_estimated_positions * padding_factor);
+  all_positions.values.reserve(total_estimated_positions * padding_factor);
   
   // Store thread results separately to avoid contention
   std::vector<GamePositions> thread_results(num_threads);

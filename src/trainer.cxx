@@ -78,36 +78,13 @@ void Trainer::Train(const GamePositions& positions) {
   network_->to(torch::kCPU);
 }
 
-
-float Trainer::UpdateTemperature(float current_temperature) {
-  // Update the self-play exploration temperature
-  Logger& logger = Logger::GetInstance(config_);
-  
-  // If early in training, maintain higher temperature
-  if (iterations_since_improvement_ < 5) {
-    current_temperature = std::max(
-        config_.min_temperature,
-        current_temperature * config_.temperature_decay
-    );
-  } else {
-    // After several iterations of no improvement, drop temperature faster
-    current_temperature = std::max(
-        config_.min_temperature,
-        current_temperature * (config_.temperature_decay * 0.9f)
-    );
-  }
-  
-  logger.LogFormat("Self-play temperature updated to: {:.4f}", current_temperature);
-  return current_temperature;
-}
-
 bool Trainer::AcceptOrRejectNewNetwork(
     std::shared_ptr<NeuralNetwork> candidate_network,
     const EvaluationStats& stats
 ) {
     Logger& logger = Logger::GetInstance(config_);
     bool network_accepted = false;
-    float win_loss_ratio = (stats.win_rate + 0.5f * stats.draw_rate) / (stats.loss_rate + stats.draw_rate + stats.win_rate);
+    float win_loss_ratio = stats.WinLossRatio();
                           
     if (win_loss_ratio >= config_.acceptance_threshold) {             
         // Save the network
@@ -120,10 +97,7 @@ bool Trainer::AcceptOrRejectNewNetwork(
     }
 
     logger.LogFormat("Network acceptance decision: {}", network_accepted ? "ACCEPTED" : "REJECTED");
-    logger.LogFormat("Win rate: {:.1f}%, Draw rate: {:.1f}%, Loss rate: {:.1f}%", 
-                      stats.win_rate * 100, 
-                      stats.draw_rate * 100, 
-                      stats.loss_rate * 100);
+    logger.Log(stats.WinStats());
     return network_accepted;
 }
 
@@ -179,7 +153,8 @@ EvaluationStats Trainer::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> o
         "Evaluator: Cannot evaluate a network against an identical network!");
   }
 
-  int wins = 0, draws = 0, losses = 0;
+  int wins_first = 0, draws_first = 0, losses_first = 0;
+  int wins_second = 0, draws_second = 0, losses_second = 0;
   const int total_games = config_.num_evaluation_games;
 
   MCTS mcts_main(network_, config_);
@@ -217,25 +192,38 @@ EvaluationStats Trainer::EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> o
     float perspective_result = network_plays_first ? result : -result;
 
     if (perspective_result > 0) {
-      losses++;  // Opponent lost
+      if (network_plays_first) {
+        wins_first++;
+      } else {
+        wins_second++;
+      }
     } else if (perspective_result == 0) {
-      draws++;
+      if (network_plays_first) {
+        draws_first++;
+      } else {
+        draws_second++;
+      }
     } else {
-      wins++;  // Opponent won
+      if (network_plays_first) {
+        losses_first++;
+      } else {
+        losses_second++;
+      }
     }
   }
 
-  EvaluationStats stats;
-  stats.win_rate = static_cast<float>(wins) / total_games;
-  stats.draw_rate = static_cast<float>(draws) / total_games;
-  stats.loss_rate = static_cast<float>(losses) / total_games;
+  EvaluationStats stats(wins_first, draws_first, losses_first, wins_second, draws_second, losses_second, total_games);  
   return stats;
 }
 
 EvaluationStats Trainer::EvaluateAgainstRandom() {
-  int wins = 0;
-  int draws = 0;
-  int losses = 0;
+  int wins_first = 0;
+  int draws_first = 0;
+  int losses_first = 0;
+  int wins_second = 0;
+  int draws_second = 0;
+  int losses_second = 0;
+
   const int total_games = config_.num_evaluation_games;
 
   std::random_device rd;
@@ -270,24 +258,29 @@ EvaluationStats Trainer::EvaluateAgainstRandom() {
     float perspective_result = network_plays_first ? result : -result;
 
     if (perspective_result > 0) {
-      wins++;
+      if (network_plays_first) {
+        wins_first++;
+      } else {
+        wins_second++;
+      }
     } else if (perspective_result == 0) {
-      draws++;
+      if (network_plays_first) {
+        draws_first++;
+      } else {
+        draws_second++;
+      }
     } else {
-      losses++;
+      if (network_plays_first) {
+        losses_first++;
+      } else {
+        losses_second++;
+      }
     }
   }
 
-  EvaluationStats stats;
-  stats.win_rate = static_cast<float>(wins) / total_games;
-  stats.draw_rate = static_cast<float>(draws) / total_games;
-  stats.loss_rate = static_cast<float>(losses) / total_games;
-        
+  EvaluationStats stats(wins_first, draws_first, losses_first, wins_second, draws_second, losses_second, total_games);
   Logger &logger = Logger::GetInstance(config_);          
-  auto log_string = logger.LogFormat("Performance vs Random: Win: {:.1f}%, Draw: {:.1f}%, Loss: {:.1f}%",
-      stats.win_rate * 100,
-      stats.draw_rate * 100,
-      stats.loss_rate * 100);
+  auto log_string = logger.Log(stats.WinStats());
   return stats;
 }
 

@@ -9,6 +9,8 @@ namespace deeprlzero {
 
 class Config {
  public:
+  // there are a bunch of things in here that are not really used...
+  //
   // Network configuration
   int num_filters = 16;
   int num_residual_blocks = 1;
@@ -99,6 +101,8 @@ class Config {
         config.gamma_alpha = std::stof(argv[++i]);
       } else if (arg == "-o" || arg == "--training-batch-size") {
         config.training_batch_size = std::stoi(argv[++i]);
+      } else if (arg == "-w" || arg == "--weight-decay") {
+        config.weight_decay = std::stof(argv[++i]);
       } else if (arg == "-h" || arg == "--help") {
         PrintUsage();
         exit(0);
