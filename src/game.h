@@ -116,19 +116,15 @@ class SelfPlay {
     network_->eval();
   }
 
-  // Execute a single episode and return the positions
-  GamePositions ExecuteEpisode();
-  
-  // Execute multiple episodes in parallel and merge the results
+  GamePositions ExecuteEpisode(); 
   GamePositions ExecuteEpisodesParallel();
+  GamePositions AllEpisodes();
 
  private:
   std::shared_ptr<NeuralNetwork> network_;
   const Config& config_;
   std::mt19937 rng_{std::random_device{}()};  
 };
-
-std::vector<GamePositions> AllEpisodes();
 
 inline float CalculateAverageExplorationMetric(const std::vector<GamePositions>& episodes) {
   if (episodes.empty()) {

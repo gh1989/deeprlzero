@@ -21,7 +21,7 @@ class Config {
   float initial_temperature = 1.0f;
   float min_temperature = 0.1f;
   float temperature_decay = 0.95f;
-
+  bool exhaustive_self_play = false;
   // MCTS configuration
   int num_simulations = 64;
   float c_puct = std::sqrt(2);
@@ -87,6 +87,8 @@ class Config {
         config.num_iterations = std::stoi(argv[++i]);
       } else if (arg == "-g" || arg == "--games") {
         config.episodes_per_iteration = std::stoi(argv[++i]);
+      } else if (arg == "-x" || arg == "--exhaustive") {
+        config.exhaustive_self_play = true;
       } else if (arg == "-m" || arg == "--model") {
         config.model_path = argv[++i];
       } else if (arg == "-n" || arg == "--eval-games") {

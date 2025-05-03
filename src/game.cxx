@@ -194,7 +194,6 @@ GamePositions SelfPlay<GameType>::ExecuteEpisode() {
   return positions;
 }
 
-// Should add nodiscard and expected error or GamePositions
 template <typename GameType>
 GamePositions SelfPlay<GameType>::ExecuteEpisodesParallel() {
   // First, run a sample episode to estimate position count
@@ -225,10 +224,7 @@ GamePositions SelfPlay<GameType>::ExecuteEpisodesParallel() {
   all_positions.policies.reserve(total_estimated_positions * padding_factor);
   all_positions.values.reserve(total_estimated_positions * padding_factor);
   
-  // Store thread results separately to avoid contention
   std::vector<GamePositions> thread_results(num_threads);
-  
-  // Launch threads
   std::vector<std::thread> threads;
   for (int i = 0; i < num_threads; ++i) {
     threads.push_back(std::thread([this, i, thread_episodes = thread_episode_counts[i], 
@@ -239,12 +235,10 @@ GamePositions SelfPlay<GameType>::ExecuteEpisodesParallel() {
     }));
   }
   
-  // Wait for all threads to complete
   for (auto& thread : threads) {
     thread.join();
   }
   
-  // Merge results sequentially to avoid allocation thrashing
   for (int i = 0; i < num_threads; ++i) {
     all_positions.Append(thread_results[i]);
   }
@@ -252,7 +246,101 @@ GamePositions SelfPlay<GameType>::ExecuteEpisodesParallel() {
   return all_positions;
 }
 
+template <typename GameType> 
+GamePositions SelfPlay<GameType>::AllEpisodes() {  
+  GamePositions all_positions;
+  std::map<std::string, float> minimax_values;
+  std::map<std::string, std::vector<float>> minimax_policies;
+  
+  std::function<float(const GameType&, std::vector<float>&)> exploreMinimax;
+  exploreMinimax = [&all_positions, &minimax_values, &minimax_policies, &exploreMinimax](
+      const GameType& state, std::vector<float>& best_policy) -> float {
+    std::string key = state.GetBoardString() + std::to_string(state.GetCurrentPlayer());
+
+    if (minimax_values.count(key)) {
+      best_policy = minimax_policies[key];
+      return minimax_values[key];
+    }
+
+    if (state.IsTerminal()) {
+      float result = state.GetGameResult();
+      minimax_values[key] = result;
+      return result;
+    }
+
+    auto valid_moves = state.GetValidMoves();
+    float best_value = -2.0f; 
+    std::vector<float> policy(GameType::kNumActions, 0.0f);
+    std::vector<int> best_moves; 
+    
+    for (int move : valid_moves) {
+      GameType next_state(state);
+      next_state.MakeMove(move);
+      
+      if (next_state.IsTerminal() && next_state.GetGameResult() == 1.0f) {
+        policy[move] = 1.0f; 
+        minimax_values[key] = 1.0f;
+        minimax_policies[key] = policy;
+        best_policy = policy;
+        
+        all_positions.boards.push_back(state.GetCanonicalBoard());
+        all_positions.policies.push_back(policy);
+        all_positions.values.push_back(1.0f);
+        
+        return 1.0f;
+      }
+    }
+
+    for (int move : valid_moves) {
+      GameType next_state(state);
+      next_state.MakeMove(move);
+      
+      std::vector<float> child_policy;
+      float child_value = -exploreMinimax(next_state, child_policy); 
+      
+      if (child_value > best_value + 1e-6f) {  
+        best_value = child_value;
+        best_moves.clear();
+        best_moves.push_back(move);
+      }
+      else if (std::abs(child_value - best_value) <= 1e-6) {  
+        best_moves.push_back(move);
+      }
+    }
+    
+    for (int move : best_moves) {
+      policy[move] = 1.0f / best_moves.size();
+    }
+    
+    minimax_values[key] = best_value;
+    minimax_policies[key] = policy;
+    best_policy = policy;
+    
+    if (!state.IsTerminal()) {
+      all_positions.boards.push_back(state.GetCanonicalBoard());
+      all_positions.policies.push_back(policy);
+      
+      // Adjust value based on player perspective (like in ExecuteEpisode)
+      float adjusted_value = (state.GetCurrentPlayer() == 1) ? best_value : -best_value;
+      all_positions.values.push_back(adjusted_value);
+    }
+        
+    return best_value;
+  };
+
+  GameType initial_game;
+  std::vector<float> initial_policy;
+  exploreMinimax(initial_game, initial_policy);
+  
+  const int expected_total_positions = 5478; 
+  const int expected_non_terminal_positions = 4520; 
+  assert(minimax_values.size() == expected_total_positions );
+  assert(all_positions.boards.size() == expected_non_terminal_positions);
+  return all_positions;
+}
+
 template GamePositions SelfPlay<TicTacToe>::ExecuteEpisode();
 template GamePositions SelfPlay<TicTacToe>::ExecuteEpisodesParallel();
+template GamePositions SelfPlay<TicTacToe>::AllEpisodes();
 
 }  

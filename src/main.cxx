@@ -39,7 +39,10 @@ int main(int argc, char** argv) {
       /// start the self play and collect the episodes.
       logger.LogFormat("Starting iteration {}/{}", iter + 1, config.num_iterations);
       GamePositions positions;
-      if (config.num_threads > 1) {
+      if (config.exhaustive_self_play) {
+        positions = self_play.AllEpisodes();
+      }
+      else if (config.num_threads > 1) {
         positions = self_play.ExecuteEpisodesParallel();
       } else {
         positions = self_play.ExecuteEpisode();
@@ -67,6 +70,7 @@ int main(int argc, char** argv) {
 
       /// every 5 iterations evaluation against random and 
       /// log the results
+      logger.Log("Evaluating against random network ...");
       trainer.EvaluateAgainstRandom();
   }
   
