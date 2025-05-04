@@ -319,8 +319,6 @@ GamePositions SelfPlay<GameType>::AllEpisodes() {
     if (!state.IsTerminal()) {
       all_positions.boards.push_back(state.GetCanonicalBoard());
       all_positions.policies.push_back(policy);
-      
-      // Adjust value based on player perspective (like in ExecuteEpisode)
       float adjusted_value = (state.GetCurrentPlayer() == 1) ? best_value : -best_value;
       all_positions.values.push_back(adjusted_value);
     }
