@@ -185,10 +185,10 @@ GamePositions SelfPlay<GameType>::ExecuteEpisode() {
     mcts.ResetRoot();  
   }
 
-  // Set the values based on game outcome. Flip value for player 2's perspective
+  // Set the values based on game outcome without flipping perspective
   float outcome = game->GetGameResult();
   for (size_t i = 0; i < positions.boards.size(); i++) {
-    positions.values.push_back((i % 2 == 0) ? outcome : -outcome);
+    positions.values.push_back(outcome);
   }
 
   return positions;
