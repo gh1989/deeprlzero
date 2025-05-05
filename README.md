@@ -8,7 +8,7 @@ make
 
 Run:
 ```
-./bin/train_deeprlzero --games 128 --epochs 1024 --threads 8 --learning-rate 0.001 --simulations 64 --acceptance-threshold 0.55 --eval-games 100 --iterations 32 --gamma -alpha 0.88 --weight-decay 0.0001
+./bin/train_deeprlzero --games 128 --epochs 1024 --threads 8 --learning-rate 0.001 --simulations 64 --acceptance-threshold 0.55 --eval-games 100 --iterations 32 --gamma-alpha 0.88 --weight-decay 0.0001
 ```
 
 Play:
