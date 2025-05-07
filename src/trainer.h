@@ -10,7 +10,7 @@
 #include <vector>
 #include <torch/torch.h>
 
-#include "game.h"
+#include "games/game.h"
 #include "network.h"
 #include "logger.h"
 

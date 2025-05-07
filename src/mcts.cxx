@@ -11,7 +11,7 @@
 
 #include "mcts.h"
 #include "config.h"
-#include "game.h"
+#include "games/game.h"
 
 namespace deeprlzero {
 

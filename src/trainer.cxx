@@ -7,6 +7,8 @@
 #include "trainer.h"
 #include "logger.h"
 
+#include "games/tictactoe.h" //Fix
+
 namespace deeprlzero {
 
 void Trainer::Train(const GamePositions& positions) {

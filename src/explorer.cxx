@@ -3,7 +3,8 @@
 #include <memory>
 #include <string>
 #include "config.h"
-#include "game.h"
+#include "games/game.h"
+#include "games/tictactoe.h"
 #include "network.h"
 #include "network.h"
 #include "mcts.h"

@@ -80,7 +80,10 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 
 # Source files for the main library
 set(SOURCES
-    src/game.cxx
+    src/games/game.cxx
+    src/games/tictactoe.cxx
+    src/games/connect4.cxx
+    src/games/chess.cxx
     src/network.cxx
     src/mcts.cxx
     src/trainer.cxx

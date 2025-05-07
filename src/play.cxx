@@ -4,7 +4,7 @@
 #include <random>
 #include <torch/torch.h>
 
-#include "game.h"
+#include "games/tictactoe.h"
 #include "mcts.h"
 #include "network.h"
 #include "config.h"

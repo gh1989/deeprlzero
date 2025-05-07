@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "config.h"
-#include "game.h"
+#include "games/game.h"
 #include "network.h"
 
 namespace deeprlzero {

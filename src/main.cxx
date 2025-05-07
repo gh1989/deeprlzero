@@ -3,7 +3,9 @@
 #include "config.h"
 #include "logger.h"
 #include "thread.h"
-#include "game.h"
+#include "games/game.h"
+#include "games/tictactoe.h"
+#include "games/selfplay.h"
 #include <iostream>
 #include <fstream>
 #include <omp.h>
