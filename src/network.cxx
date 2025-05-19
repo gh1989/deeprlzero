@@ -5,44 +5,12 @@
 #include <cassert>
 
 /*
-Network Arch
- ─────────────────────┐
-│     Input (3×3×3)   │  3 channels: player pieces, opponent pieces, turn indicator
-└──────────┬──────────┘
-           ▼
-┌─────────────────────┐
-│  Conv2D (3×3, pad=1)│  Input channels: 3, Output channels: num_filters
-└──────────┬──────────┘
-           ▼
-┌─────────────────────┐
-│    BatchNorm2D      │
-└──────────┬──────────┘
-           ▼
-┌─────────────────────┐
-│       ReLU          │
-└──────────┬──────────┘
-           ▼
-┌─────────────────────┐
-│                     │
-│   Residual Blocks   │  num_residual_blocks (configurable)
-│                     │
-└──────────┬──────────┘
-           ▼
-┌─────────────────────┐
-│     Flatten         │  Reshape to (batch_size, num_filters * 9)
-└───────┬──────┬──────┘
-        │      │
-        ▼      ▼
-┌───────────┐  ┌───────────┐
-│ Policy FC │  │ Value FC  │
-│  Linear   │  │  Linear   │
-└─────┬─────┘  └─────┬─────┘
-      │              │
-      ▼              ▼
-┌───────────┐  ┌───────────┐
-│ Logits    │  │   Tanh    │
-│ (9 moves) │  │           │
-└───────────┘  └───────────┘
+Neural Network Architecture
+
+    ┌───────────┐  ┌───────────┐
+    │ Logits    │  │   Tanh    │
+    │ (9 moves) │  │           │
+    └───────────┘  └───────────┘
 
 Residual Block
         ┌───────────────────┐
@@ -111,6 +79,11 @@ NeuralNetwork::NeuralNetwork(const Config& config) : config_(config) {
 
   /// Specialized for tic-tac-toe again :@
   /// also input channels is always three, ours, theirs and a whole channel for the turn.
+  /// TODO: For longer games like chess, we'll need to:
+  /// 1. Add temporal discounting for reward signals
+  /// 2. Implement intermediate value functions beyond win/loss
+  /// 3. Adjust the network architecture to handle larger state spaces
+  /// 4. Support bootstrapping from intermediate positions
   const auto board_size = 3 * 3;  
   const auto input_channels = 3;
   board_size_ = board_size;
@@ -142,6 +115,9 @@ std::pair<torch::Tensor, torch::Tensor> NeuralNetwork::forward( torch::Tensor x)
 
 std::pair<torch::Tensor, torch::Tensor> NeuralNetwork::forward_impl(
     torch::Tensor x) {
+  // TODO: For longer games, the value prediction will need to be more 
+  // sophisticated, supporting temporal discounting and intermediate evaluations
+  // rather than just final game outcomes
   x = conv(x);
   x = batch_norm(x);
   x = torch::relu(x);

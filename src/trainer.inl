@@ -34,6 +34,10 @@ void Train(std::shared_ptr<torch::optim::Optimizer> optimizer,
   auto states = torch::stack(positions.boards).to(device);
   auto policies = torch::stack(policy_tensors).to(device);
   auto values = torch::tensor(positions.values).reshape({-1, 1}).to(device);
+  
+  // TODO: For longer games, the value targets would need temporal adjustment
+  // such as discounted returns or TD(λ) approaches to properly handle the 
+  // delayed nature of rewards in games like chess
 
   for (int epoch = 0; epoch < config.num_epochs; ++epoch) {
     optimizer->zero_grad();

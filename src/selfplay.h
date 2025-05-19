@@ -66,6 +66,13 @@ GamePositions ExecuteEpisode(std::shared_ptr<NeuralNetwork> network, const Confi
   for (size_t i = 0; i < positions.boards.size(); i++) {
     positions.values.push_back(outcome);
   }
+  
+  // TODO: For games like chess, this simple approach won't work well.
+  // We'll need to implement:
+  // 1. Temporal discounting (γ^(T-t)) where future rewards are weighted less
+  // 2. Intermediate value functions based on material/position
+  // 3. TD(λ) or other bootstrapping approaches for long-term rewards
+  // 4. Value targets that decay based on distance from terminal position
 
   return positions;
 }
