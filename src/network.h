@@ -34,16 +34,10 @@ class NeuralNetwork : public torch::nn::Module, public std::enable_shared_from_t
   void InitializeWeights();
   const torch::Tensor& GetCachedPolicy() const { return cached_policy_; }
   const torch::Tensor& GetCachedValue() const { return cached_value_; }
-  void ValidateGradientFlow(const torch::Tensor& input,
-                            const torch::Tensor& target_policy,
-                            const torch::Tensor& target_value); 
-
-  static std::shared_ptr<NeuralNetwork> CreateInitialNetwork(const Config& config);
-  static std::shared_ptr<NeuralNetwork> LoadBestNetwork(const Config& config);
-  static void SaveBestNetwork(std::shared_ptr<NeuralNetwork> network, const Config& config);
-  std::shared_ptr<NeuralNetwork> NetworkClone(const torch::Device& device) const;
-  static float CalculatePolicyEntropy(const std::vector<float>& policy);
-
+std::shared_ptr<NeuralNetwork> NetworkClone(const torch::Device& device) const;
+void ValidateGradientFlow(const torch::Tensor& input,
+                          const torch::Tensor& target_policy,
+                          const torch::Tensor& target_value); 
  private:
   torch::nn::Conv2d conv{nullptr};
   torch::nn::BatchNorm2d batch_norm{nullptr};
@@ -56,6 +50,13 @@ class NeuralNetwork : public torch::nn::Module, public std::enable_shared_from_t
   Config config_;
   int board_size_ = 9;  // tic-tac-toe
 };
+
+
+float CalculatePolicyEntropy(const std::vector<float>& policy);
+
+std::shared_ptr<NeuralNetwork> CreateInitialNetwork(const Config& config);
+std::shared_ptr<NeuralNetwork> LoadBestNetwork(const Config& config);
+void SaveBestNetwork(std::shared_ptr<NeuralNetwork> network, const Config& config);
 
 }  
 

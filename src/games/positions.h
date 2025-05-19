@@ -13,31 +13,11 @@
 #include <future>
 #include <stdexcept>
 #include <thread>
+#include <concepts>
 
-#include "../config.h"
-#include "../network.h"
-#include "../logger.h"
-
-
-
+#include "traits.h"
 
 namespace deeprlzero {
-
-class Game {
- public:
-  virtual ~Game() = default;
-  virtual std::vector<int> GetValidMoves() const = 0;
-  virtual void MakeMove(int move) = 0;
-  virtual float GetGameResult() const = 0;
-  virtual bool IsTerminal() const = 0;
-  virtual int GetCurrentPlayer() const = 0;
-  virtual torch::Tensor GetCanonicalBoard() const = 0;
-  virtual std::unique_ptr<Game> Clone() const = 0;
-  virtual int GetActionSize() const = 0;
-  virtual int GetInputChannels() const = 0;
-  virtual void UndoMove(int move) = 0;
-  virtual void Reset() = 0;
-};
 
 struct GamePositions {
   std::vector<torch::Tensor> boards;

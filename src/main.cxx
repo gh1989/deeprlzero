@@ -3,9 +3,8 @@
 #include "config.h"
 #include "logger.h"
 #include "thread.h"
-#include "games/game.h"
 #include "games/tictactoe.h"
-#include "games/selfplay.h"
+#include "selfplay.h"
 #include <iostream>
 #include <fstream>
 #include <omp.h>
@@ -13,6 +12,7 @@
 
 using namespace deeprlzero;
 
+// A run using the tic tac toe
 int main(int argc, char** argv) {
   auto config = Config::ParseCommandLine(argc, argv);
   auto& logger = Logger::GetInstance(config);
@@ -22,39 +22,46 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  // Track training metrics across iterations
+  float last_policy_loss = 0.0f;
+  float last_value_loss = 0.0f;
+  float last_total_loss = 0.0f;
+  float last_param_variance = 0.0f;
+  int iterations_since_improvement = 0;
+
   /// get the best network from the file or create a new one and just save that (static operations pass in the config.)
   std::shared_ptr<NeuralNetwork> best_network = nullptr;
-  best_network = NeuralNetwork::LoadBestNetwork(config);
+  best_network = LoadBestNetwork(config);
   if (!best_network) {
       logger.Log("No existing model found. Creating a new one.");
-      best_network = NeuralNetwork::CreateInitialNetwork(config);
-      NeuralNetwork::SaveBestNetwork(best_network, config);
+      best_network = CreateInitialNetwork(config);
+      SaveBestNetwork(best_network, config);
   }
     
+  auto optimizer = std::make_shared<torch::optim::Adam>(best_network->parameters(), config.learning_rate);
+
   for (int iter = 0; iter < config.num_iterations; ++iter) {
       /// for the self play, we need to clone the network to the cpu - potential source of error.
       auto best_clone = best_network->NetworkClone(torch::kCPU);
       auto network_to_train = std::dynamic_pointer_cast<NeuralNetwork>(best_clone);
-      SelfPlay<TicTacToe> self_play(best_network, config);
-      Trainer trainer(network_to_train, config);
- 
+
       /// start the self play and collect the episodes.
       logger.LogFormat("Starting iteration {}/{}", iter + 1, config.num_iterations);
       GamePositions positions;
       if (config.exhaustive_self_play) {
-        positions = self_play.AllEpisodes();
+        positions = AllEpisodes<TicTacToe>();
       }
       else if (config.num_threads > 1) {
-        positions = self_play.ExecuteEpisodesParallel();
+        positions = ExecuteEpisodesParallel<TicTacToe>(best_network, config);
       } else {
-        positions = self_play.ExecuteEpisode();
+        positions = ExecuteEpisode<TicTacToe>(best_network, config);
       }
       logger.LogFormat("Collected {} game positions from self-play", positions.boards.size());
 
       /// was the self play good?
       float exploration_metric = 0.0f;
       for (const auto& policy : positions.policies) {
-        exploration_metric += NeuralNetwork::CalculatePolicyEntropy(policy);
+        exploration_metric += CalculatePolicyEntropy(policy);
       }
       if (!positions.policies.empty()) {
         exploration_metric /= positions.policies.size();
@@ -62,18 +69,26 @@ int main(int argc, char** argv) {
       }
 
       /// train - then accept/reject
-      trainer.Train(positions);
-      EvaluationStats evaluation_stats = trainer.EvaluateAgainstNetwork(best_network);
-      bool network_accepted = trainer.AcceptOrRejectNewNetwork(best_network, evaluation_stats);
+      Train<TicTacToe>(optimizer, network_to_train, config, positions);
+                      
+      EvaluationStats evaluation_stats = 
+          EvaluateAgainstNetwork<TicTacToe>(network_to_train, best_network, config);
+          
+      bool network_accepted = 
+          AcceptOrRejectNewNetwork(network_to_train, best_network, evaluation_stats, config );
+                                  
       if (network_accepted) {
-        best_network = std::dynamic_pointer_cast<NeuralNetwork>(trainer.GetTrainedNetwork()->NetworkClone(torch::kCPU));
-        NeuralNetwork::SaveBestNetwork(best_network, config);
+        best_network = std::dynamic_pointer_cast<NeuralNetwork>(
+            network_to_train->NetworkClone(torch::kCPU));
+        SaveBestNetwork(best_network, config);
+        iterations_since_improvement = 0;
       }
+      else iterations_since_improvement++;
 
       /// every 5 iterations evaluation against random and 
       /// log the results
       logger.Log("Evaluating against random network ...");
-      trainer.EvaluateAgainstRandom();
+      EvaluateAgainstRandom<TicTacToe>(best_network, config);
   }
   
   logger.Log("Training complete!");

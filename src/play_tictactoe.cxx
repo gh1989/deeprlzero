@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
   std::shared_ptr<NeuralNetwork> network;
   try {
     // Use the static method to load the best network
-    network = NeuralNetwork::LoadBestNetwork(config);
+    network = LoadBestNetwork(config);
     if (!network) {
       throw std::runtime_error("Model loading failed - returned null pointer");
     }
@@ -72,13 +72,13 @@ int main(int argc, char* argv[]) {
   
   // Game loop
   while (true) {
-    auto game = std::make_unique<TicTacToe>();
+    TicTacToe game;
     bool human_turn = human_first;
     
-    while (!game->IsTerminal()) {
+    while (!IsTerminal(game)) {
       // Display current board
       std::cout << "\nCurrent board:" << std::endl;
-      std::cout << game->ToString() << std::endl;
+      std::cout << ToString(game) << std::endl;
       
       if (human_turn) {
         // Human player's turn
@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
             continue;
           }
           
-          auto valid_moves = game->GetValidMoves();
+          auto valid_moves = GetValidMoves(game);
           bool is_valid = false;
           for (int valid_move : valid_moves) {
             if (move == valid_move) {
@@ -108,19 +108,19 @@ int main(int argc, char* argv[]) {
           }
         }
         
-        game->MakeMove(move);
+        MakeMove(game, move);
       } else {
         // AI's turn
         std::cout << "AI thinking..." << std::endl;
         mcts.ResetRoot();
         
         for (int sim = 0; sim < config.num_simulations; ++sim) {
-          mcts.Search(game.get(), mcts.GetRoot());
+          mcts.Search(game, mcts.GetRoot());
         }
         
-        int action = mcts.SelectMove(game.get(), 0.0f); // Deterministic play
+        int action = mcts.SelectMove(game, 0.0f); // Deterministic play
         std::cout << "AI chooses: " << action << std::endl;
-        game->MakeMove(action);
+        MakeMove(game, action);
       }
       
       // Switch turns
@@ -129,10 +129,10 @@ int main(int argc, char* argv[]) {
     
     // Display final board
     std::cout << "\nFinal board:" << std::endl;
-    std::cout << game->ToString() << std::endl;
+    std::cout << ToString(game) << std::endl;
     
     // Display result
-    float result = game->GetGameResult();
+    float result = GetGameResult(game);
     if (result > 0) {
       std::cout << "Player X wins!" << std::endl;
     } else if (result < 0) {

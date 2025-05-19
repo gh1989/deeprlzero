@@ -200,7 +200,7 @@ std::shared_ptr<NeuralNetwork> NeuralNetwork::NetworkClone(const torch::Device& 
   return cloned_net;
 }
 
-std::shared_ptr<NeuralNetwork> NeuralNetwork::CreateInitialNetwork(const Config& config) {
+std::shared_ptr<NeuralNetwork> CreateInitialNetwork(const Config& config) {
     try {
         return std::make_shared<NeuralNetwork>(config);
     } catch (const std::exception& e) {
@@ -209,7 +209,7 @@ std::shared_ptr<NeuralNetwork> NeuralNetwork::CreateInitialNetwork(const Config&
     }
 };
 
-std::shared_ptr<NeuralNetwork> NeuralNetwork::LoadBestNetwork(const Config& config) {
+std::shared_ptr<NeuralNetwork> LoadBestNetwork(const Config& config) {
     Logger &logger = Logger::GetInstance(config);
     try {
         if (std::filesystem::exists(config.model_path)) {
@@ -225,7 +225,7 @@ std::shared_ptr<NeuralNetwork> NeuralNetwork::LoadBestNetwork(const Config& conf
     return nullptr;
 };
   
-void NeuralNetwork::SaveBestNetwork(std::shared_ptr<NeuralNetwork> network, const Config& config) {
+void SaveBestNetwork(std::shared_ptr<NeuralNetwork> network, const Config& config) {
     Logger &logger = Logger::GetInstance(config);
     try {
         logger.LogFormat("Saving model to: {}", config.model_path);
@@ -291,11 +291,10 @@ void NeuralNetwork::ValidateGradientFlow(const torch::Tensor& input,
   }
 }
 
-float NeuralNetwork::CalculatePolicyEntropy(const std::vector<float>& policy) {
+float CalculatePolicyEntropy(const std::vector<float>& policy) {
   float entropy = 0.0f;
   
   for (const float& prob : policy) {
-    // Avoid log(0) by adding a small epsilon
     if (prob > 1e-10) {
       entropy -= prob * std::log(prob);
     }

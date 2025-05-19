@@ -11,7 +11,7 @@
 
 #include "mcts.h"
 #include "config.h"
-#include "games/game.h"
+#include "games/variant.h"
 
 namespace deeprlzero {
 
@@ -23,9 +23,9 @@ MCTS::MCTS(std::shared_ptr<NeuralNetwork> network, const Config& config)
 
 void MCTS::ResetRoot() { root_ = std::make_unique<Node>(config_); }
 
-std::vector<float> MCTS::GetActionProbabilities(const Game* state,
+std::vector<float> MCTS::GetActionProbabilities(const GameVariant& state,
                                                 float temperature) {
-  std::vector<float> pi(state->GetActionSize(), 0.0f);
+  std::vector<float> pi(GetActionSize(state), 0.0f);
   float sum = 0.0f;
 
   for (size_t i = 0; i < root_->children.size(); ++i) {
@@ -49,27 +49,27 @@ std::vector<float> MCTS::GetActionProbabilities(const Game* state,
   return pi;
 }
 
-void MCTS::Search(const Game* state, Node* node) {
-  std::unique_ptr<Game> mutable_state = state->Clone();
+void MCTS::Search(const GameVariant& state, Node* node) {
+  GameVariant mutable_state = Clone(state);
 
-  if (mutable_state->IsTerminal()) {
-    float value = mutable_state->GetGameResult();
+  if (IsTerminal(mutable_state)) {
+    float value = GetGameResult(mutable_state);
     Backpropagate(node, value);
     return;
   }
 
   if (!node->IsExpanded()) {
-    ExpandNode(node, mutable_state.get());
+    ExpandNode(node, mutable_state);
   }
 
-  auto [action, child] = SelectAction(node, mutable_state.get());
+  auto [action, child] = SelectAction(node, mutable_state);
   last_move_ = action;
-  mutable_state->MakeMove(action);
-  Search(mutable_state.get(), child);
-  mutable_state->UndoMove(last_move_);
+  MakeMove(mutable_state, action);
+  Search(mutable_state, child);
+  UndoMove(mutable_state, last_move_);
 }
 
-std::pair<int, Node*> MCTS::SelectAction(Node* node, const Game* state) {
+std::pair<int, Node*> MCTS::SelectAction(Node* node, const GameVariant& state) {
   assert(node != nullptr && "Node cannot be null");
   assert(node->IsExpanded() && "Node must be expanded before selection");
 
@@ -77,7 +77,7 @@ std::pair<int, Node*> MCTS::SelectAction(Node* node, const Game* state) {
   int best_action = -1;
   Node* best_child = nullptr;
 
-  auto valid_moves = state->GetValidMoves();
+  auto valid_moves = GetValidMoves(state);
   assert(!valid_moves.empty() && "Must have at least one valid move");
   float parent_visit_sqrt =
       std::sqrt(static_cast<float>(node->visit_count) + 1e-6f);
@@ -127,13 +127,9 @@ float MCTS::Backpropagate(Node* node, float value) {
   return value;
 }
 
-std::pair<std::vector<float>, float> MCTS::GetPolicyValue(const Game* state) {
-  if (!state) {
-    throw std::runtime_error("Null state in GetPolicyValue");
-  }
-
+std::pair<std::vector<float>, float> MCTS::GetPolicyValue(const GameVariant& state) {
   auto device = network_->parameters().begin()->device();
-  auto state_tensor = state->GetCanonicalBoard().unsqueeze(0).to(device);
+  auto state_tensor = GetCanonicalBoard(state).unsqueeze(0).to(device);
   auto [policy_tensor, value_tensor] = network_->forward(state_tensor);
   policy_tensor = policy_tensor.to(torch::kCPU).contiguous();
   value_tensor = value_tensor.to(torch::kCPU).contiguous();
@@ -154,8 +150,8 @@ std::pair<std::vector<float>, float> MCTS::GetPolicyValue(const Game* state) {
   return {policy, value};
 }
 
-int MCTS::SelectMove(const Game* state, float temperature) {
-  auto valid_moves = state->GetValidMoves();
+int MCTS::SelectMove(const GameVariant& state, float temperature) {
+  auto valid_moves = GetValidMoves(state);
   auto probs = GetActionProbabilities(state, temperature);
 
   if (temperature == 0.0f) {
@@ -185,11 +181,11 @@ int MCTS::SelectMove(const Game* state, float temperature) {
   }
 }
 
-void MCTS::ExpandNode(Node* node, const Game* state) {
-  std::vector<int> valid_moves = state->GetValidMoves();
+void MCTS::ExpandNode(Node* node, const GameVariant& state) {
+  std::vector<int> valid_moves = GetValidMoves(state);
 
   if (node->children.empty()) {
-    node->children.resize(state->GetActionSize());
+    node->children.resize(GetActionSize(state));
   }
 
   auto [policy, value] = GetPolicyValue(state);
@@ -222,9 +218,9 @@ void MCTS::ExpandNode(Node* node, const Game* state) {
   node->SetExpanded();
 }
 
-float MCTS::FullSearch(const Game* state, Node* node) {
-  if (state->IsTerminal()) {
-    return state->GetGameResult();
+float MCTS::FullSearch(const GameVariant& state, Node* node) {
+  if (IsTerminal(state)) {
+    return GetGameResult(state);
   }
 
   if (!node->IsExpanded()) {
@@ -237,12 +233,12 @@ float MCTS::FullSearch(const Game* state, Node* node) {
     if (!child_ptr) {
       continue;
     }
-    std::unique_ptr<Game> new_state = state->Clone();
-    new_state->MakeMove(child_ptr->action);
+    GameVariant new_state = Clone(state);
+    MakeMove(new_state, child_ptr->action);
 
     // Using negamax: the value for the child is the negative of FullSearch on
     // the new state.
-    float child_value = -FullSearch(new_state.get(), child_ptr.get());
+    float child_value = -FullSearch(new_state, child_ptr.get());
 
     if (child_value > best_value) {
       best_value = child_value;
@@ -258,8 +254,8 @@ float MCTS::FullSearch(const Game* state, Node* node) {
   return best_value;
 }
 
-void MCTS::AddDirichletNoiseToRoot(const Game* state) {
-  std::vector<int> valid_moves = state->GetValidMoves();
+void MCTS::AddDirichletNoiseToRoot(const GameVariant& state) {
+  std::vector<int> valid_moves = GetValidMoves(state);
   
   // Create Dirichlet distribution for valid moves
   std::random_device rd;
@@ -273,9 +269,8 @@ void MCTS::AddDirichletNoiseToRoot(const Game* state) {
     float noise_sample = gamma_dist(gen);
     noise.push_back(noise_sample);
     noise_sum += noise_sample;
-  }
-  
-  // Mix with existing prior probabilities (25% noise, 75% original)
+  } 
+
   const float noise_weight = 0.50f;
   for (size_t i = 0; i < valid_moves.size(); i++) {
     int move = valid_moves[i];

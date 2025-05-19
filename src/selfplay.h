@@ -1,33 +1,14 @@
-#ifndef GAMES_SELFPLAY_H
-#define GAMES_SELFPLAY_H
+#ifndef SELFPLAY_H
+#define SELFPLAY_H
 
-#include "../mcts.h"
+#include "mcts.h"
+#include "logger.h"
 
-#include "game.h"
-#include "tictactoe.h"
+#include "games/variant.h"
+#include "games/positions.h"
+#include "games/concepts.h"
 
 namespace deeprlzero {
-
-template <typename GameType>
-class SelfPlay {
-  static_assert(std::is_base_of<Game, GameType>::value, "GameType must derive from Game");
- public:
-   SelfPlay(std::shared_ptr<NeuralNetwork> network, const Config& config)
-    : config_(config) {
-    network_ = std::dynamic_pointer_cast<NeuralNetwork>(network->NetworkClone(torch::kCPU));
-    network_->to(torch::kCPU);
-    network_->eval();
-  }
-
-  GamePositions ExecuteEpisode(); 
-  GamePositions ExecuteEpisodesParallel();
-  GamePositions AllEpisodes();
-
- private:
-  std::shared_ptr<NeuralNetwork> network_;
-  const Config& config_;
-  std::mt19937 rng_{std::random_device{}()};  
-};
 
 inline float CalculateAverageExplorationMetric(const std::vector<GamePositions>& episodes) {
   if (episodes.empty()) {
@@ -39,7 +20,7 @@ inline float CalculateAverageExplorationMetric(const std::vector<GamePositions>&
   
   for (const auto& episode : episodes) {
     for (const auto& policy : episode.policies) {
-      total_entropy += NeuralNetwork::CalculatePolicyEntropy(policy);
+      total_entropy += CalculatePolicyEntropy(policy);
       total_moves++;
     }
   }
@@ -49,38 +30,39 @@ inline float CalculateAverageExplorationMetric(const std::vector<GamePositions>&
   return exploration_metric;
 }
 
-template <typename GameType>
-GamePositions SelfPlay<GameType>::ExecuteEpisode() {
-  network_->eval();
+template <typename GameVariant>
+requires GameConcept<GameVariant> 
+GamePositions ExecuteEpisode(std::shared_ptr<NeuralNetwork> network, const Config& config) {
+  network->eval();
 
   GamePositions positions;
-  MCTS mcts(network_, config_);
+  MCTS mcts(network, config);
 
-  auto game = std::make_unique<GameType>();
+  GameVariant game;
 
-  while (!game->IsTerminal()) {
-    torch::Tensor board = game->GetCanonicalBoard();
+  while (!IsTerminal(game)) {
+    torch::Tensor board = GetCanonicalBoard(game);
     ///actually let's not.
     //mcts.AddDirichletNoiseToRoot(game.get());
-    for (int i = 0; i < config_.num_simulations; ++i) {
-      mcts.Search(game.get(), mcts.GetRoot());
+    for (int i = 0; i < config.num_simulations; ++i) {
+      mcts.Search(game, mcts.GetRoot());
     }
 
     // Use a smarter temperature approach that decreases as the game progresses
-    float move_temperature = config_.self_play_temperature;
+    float move_temperature = config.self_play_temperature;
     int move_number = positions.boards.size();
 
-    std::vector<float> policy = mcts.GetActionProbabilities(game.get(), move_temperature);
+    std::vector<float> policy = mcts.GetActionProbabilities(game, move_temperature);
     positions.boards.push_back(board);
     positions.policies.push_back(policy);
 
-    int move = mcts.SelectMove(game.get(), move_temperature);
-    game->MakeMove(move);
+    int move = mcts.SelectMove(game, move_temperature);
+    MakeMove(game, move);
     mcts.ResetRoot();  
   }
 
   // Set the values based on game outcome without flipping perspective
-  float outcome = game->GetGameResult();
+  float outcome = GetGameResult(game);
   for (size_t i = 0; i < positions.boards.size(); i++) {
     positions.values.push_back(outcome);
   }
@@ -88,17 +70,18 @@ GamePositions SelfPlay<GameType>::ExecuteEpisode() {
   return positions;
 }
 
-template <typename GameType>
-GamePositions SelfPlay<GameType>::ExecuteEpisodesParallel() {
+template <typename GameVariant>
+requires GameConcept<GameVariant>
+GamePositions ExecuteEpisodesParallel(std::shared_ptr<NeuralNetwork> network, const Config& config) {
   // First, run a sample episode to estimate position count
-  auto sample = ExecuteEpisode();
+  auto sample = ExecuteEpisode<GameVariant>(network, config);
   int estimated_positions_per_episode = sample.boards.size();
   
   // Calculate total threads and distribution
-  const int num_threads = std::min(config_.num_threads, 
-                                  std::max(1, config_.episodes_per_iteration));
-  const int episodes_per_thread = config_.episodes_per_iteration / num_threads;
-  const int remaining_episodes = config_.episodes_per_iteration % num_threads;
+  const int num_threads = std::min(config.num_threads, 
+                                  std::max(1, config.episodes_per_iteration));
+  const int episodes_per_thread = config.episodes_per_iteration / num_threads;
+  const int remaining_episodes = config.episodes_per_iteration % num_threads;
   
   // Pre-compute episode assignments and positions
   std::vector<int> thread_episode_counts(num_threads);
@@ -121,10 +104,10 @@ GamePositions SelfPlay<GameType>::ExecuteEpisodesParallel() {
   std::vector<GamePositions> thread_results(num_threads);
   std::vector<std::thread> threads;
   for (int i = 0; i < num_threads; ++i) {
-    threads.push_back(std::thread([this, i, thread_episodes = thread_episode_counts[i], 
+    threads.push_back(std::thread([network, config, i, thread_episodes = thread_episode_counts[i], 
                                   &thread_results]() {
       for (int j = 0; j < thread_episodes; ++j) {
-        thread_results[i].Append(ExecuteEpisode());
+        thread_results[i].Append(ExecuteEpisode<GameVariant>(network, config));
       }
     }));
   }
@@ -140,44 +123,45 @@ GamePositions SelfPlay<GameType>::ExecuteEpisodesParallel() {
   return all_positions;
 }
 
-template <typename GameType> 
-GamePositions SelfPlay<GameType>::AllEpisodes() {  
+template <typename GameVariant>
+requires GameConcept<GameVariant>
+GamePositions AllEpisodes() {  
   GamePositions all_positions;
   std::map<std::string, float> minimax_values;
   std::map<std::string, std::vector<float>> minimax_policies;
   
-  std::function<float(const GameType&, std::vector<float>&)> exploreMinimax;
+  std::function<float(const GameVariant&, std::vector<float>&)> exploreMinimax;
   exploreMinimax = [&all_positions, &minimax_values, &minimax_policies, &exploreMinimax](
-      const GameType& state, std::vector<float>& best_policy) -> float {
-    std::string key = state.GetBoardString() + std::to_string(state.GetCurrentPlayer());
+      const GameVariant& state, std::vector<float>& best_policy) -> float {
+    std::string key = GetBoardString(state) + std::to_string(GetCurrentPlayer(state));
 
     if (minimax_values.count(key)) {
       best_policy = minimax_policies[key];
       return minimax_values[key];
     }
 
-    if (state.IsTerminal()) {
-      float result = state.GetGameResult();
+    if (IsTerminal(state)) {
+      float result = GetGameResult(state);
       minimax_values[key] = result;
       return result;
     }
 
-    auto valid_moves = state.GetValidMoves();
+    auto valid_moves = GetValidMoves(state);
     float best_value = -2.0f; 
-    std::vector<float> policy(GameType::kNumActions, 0.0f);
+    std::vector<float> policy(GetNumActions(state), 0.0f);
     std::vector<int> best_moves; 
     
     for (int move : valid_moves) {
-      GameType next_state(state);
-      next_state.MakeMove(move);
+      auto next_state = Clone(state);
+      MakeMove(next_state, move);
       
-      if (next_state.IsTerminal() && next_state.GetGameResult() == 1.0f) {
+      if (IsTerminal(next_state) && GetGameResult(next_state) == 1.0f) {
         policy[move] = 1.0f; 
         minimax_values[key] = 1.0f;
         minimax_policies[key] = policy;
         best_policy = policy;
         
-        all_positions.boards.push_back(state.GetCanonicalBoard());
+        all_positions.boards.push_back(GetCanonicalBoard(state));
         all_positions.policies.push_back(policy);
         all_positions.values.push_back(1.0f);
         
@@ -186,8 +170,9 @@ GamePositions SelfPlay<GameType>::AllEpisodes() {
     }
 
     for (int move : valid_moves) {
-      GameType next_state(state);
-      next_state.MakeMove(move);
+      // Think of this.
+      auto next_state = Clone(state);
+      MakeMove(next_state, move);
       
       std::vector<float> child_policy;
       float child_value = -exploreMinimax(next_state, child_policy); 
@@ -199,28 +184,17 @@ GamePositions SelfPlay<GameType>::AllEpisodes() {
       }
       else if (std::abs(child_value - best_value) <= 1e-6) {  
         best_moves.push_back(move);
-      }
-    }
-    
-    for (int move : best_moves) {
-      policy[move] = 1.0f / best_moves.size();
-    }
-    
-    minimax_values[key] = best_value;
-    minimax_policies[key] = policy;
-    best_policy = policy;
-    
-    if (!state.IsTerminal()) {
-      all_positions.boards.push_back(state.GetCanonicalBoard());
+      } 
+
       all_positions.policies.push_back(policy);
-      float adjusted_value = (state.GetCurrentPlayer() == 1) ? best_value : -best_value;
+      float adjusted_value = (GetCurrentPlayer(state) == 1) ? best_value : -best_value;
       all_positions.values.push_back(adjusted_value);
     }
         
     return best_value;
   };
 
-  GameType initial_game;
+  GameVariant initial_game;
   std::vector<float> initial_policy;
   exploreMinimax(initial_game, initial_policy);
   
@@ -230,11 +204,6 @@ GamePositions SelfPlay<GameType>::AllEpisodes() {
   assert(all_positions.boards.size() == expected_non_terminal_positions);
   return all_positions;
 }
-
-// explicit instantiations here
-template GamePositions SelfPlay<TicTacToe>::ExecuteEpisode();
-template GamePositions SelfPlay<TicTacToe>::ExecuteEpisodesParallel();
-template GamePositions SelfPlay<TicTacToe>::AllEpisodes();
 
 }
 

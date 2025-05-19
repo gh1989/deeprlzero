@@ -3,9 +3,7 @@
 #include <memory>
 #include <string>
 #include "config.h"
-#include "games/game.h"
 #include "games/tictactoe.h"
-#include "network.h"
 #include "network.h"
 #include "mcts.h"
 #include "trainer.h"
@@ -14,14 +12,14 @@
 using namespace deeprlzero;
 
 // Helper function to visualize MCTS tree at important nodes
-void PrintMCTSTree(Node* node, const Game* game, int depth = 0, int max_depth = 2) {
+void PrintMCTSTree(Node* node, const TicTacToe* game, int depth = 0, int max_depth = 2) {
   if (!node || depth > max_depth) return;
   
   std::string indent(depth * 2, ' ');
   std::cout << indent << "Node";
   if (node->action >= 0) {
-    int row = node->action / TicTacToe::kBoardSize;
-    int col = node->action % TicTacToe::kBoardSize; 
+    int row = node->action / 9;
+    int col = node->action % 9; 
     std::cout << " (" << row+1 << "," << col+1 << ")";
   } else {
     std::cout << " (root)";
@@ -57,8 +55,8 @@ void PrintMCTSTree(Node* node, const Game* game, int depth = 0, int max_depth = 
         break;
       }
       
-      int row = action / TicTacToe::kBoardSize;
-      int col = action % TicTacToe::kBoardSize;
+      int row = action / 9;
+      int col = action % 9;
       std::cout << indent << "  ├─ ";
       std::cout << "(" << row+1 << "," << col+1 << ")";
       std::cout << " Visits: " << child->visit_count 
@@ -103,7 +101,7 @@ GamePositions GenerateAllTicTacToeGames() {
     // Get valid moves and prepare to compute minimax
     auto valid_moves = state.GetValidMoves();
     float best_value = -2.0f; // Initialize to worse than worst possible value
-    std::vector<float> policy(TicTacToe::kNumActions, 0.0f);
+    std::vector<float> policy(9, 0.0f);
     std::vector<int> best_moves; // Track optimal moves
     
     // First check for immediate winning moves
@@ -169,7 +167,7 @@ GamePositions GenerateAllTicTacToeGames() {
       std::cout << "Player: " << state.GetCurrentPlayer() << std::endl;
       std::cout << "Value: " << best_value << std::endl;
       std::cout << "Policy: ";
-      for (int i = 0; i < TicTacToe::kNumActions; i++) {
+      for (int i = 0; i < 9; i++) {
         std::cout << policy[i] << " ";
         if (i % 3 == 2) std::cout << std::endl << "        ";
       }
@@ -254,7 +252,7 @@ GamePositions GenerateAllTicTacToeGames() {
         std::cout << "Current player: " << test_state->GetCurrentPlayer() << std::endl;
         std::cout << "Minimax value: " << minimax_values[key] << std::endl;
         std::cout << "Policy: ";
-        for (int i = 0; i < TicTacToe::kNumActions; i++) {
+        for (int i = 0; i < 9; i++) {
           std::cout << minimax_policies[key][i] << " ";
           if (i % 3 == 2) std::cout << std::endl << "        ";
         }
@@ -321,7 +319,6 @@ void runComprehensiveTraining(std::shared_ptr<NeuralNetwork> network, Config con
   
   // Generate all possible games
   GamePositions all_episodes = GenerateAllTicTacToeGames();
-    Trainer trainer(network, config);
 
   // Select CUDA device
   torch::Device device(torch::kCUDA, 0);
@@ -340,7 +337,7 @@ void runComprehensiveTraining(std::shared_ptr<NeuralNetwork> network, Config con
     // Create policy tensor
     all_policies.push_back(torch::from_blob(
         const_cast<float*>(all_episodes.policies[&episode - &all_episodes.boards[0]].data()),
-        {TicTacToe::kNumActions}, 
+        {9}, 
         torch::kFloat32).clone());
     
     // Add value targets (adjusted for player perspective)
@@ -520,7 +517,7 @@ void runComprehensiveTraining(std::shared_ptr<NeuralNetwork> network, Config con
   network->to(torch::kCPU);
 
   // Store and display evaluation results
-  auto eval_stats = trainer.EvaluateAgainstRandom();
+  auto eval_stats = EvaluateAgainstRandom<TicTacToe>(network, config);
   std::cout << eval_stats.WinStats();
 
   // Save the comprehensively trained model

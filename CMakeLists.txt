@@ -80,10 +80,7 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 
 # Source files for the main library
 set(SOURCES
-    src/games/game.cxx
     src/games/tictactoe.cxx
-    src/games/connect4.cxx
-    src/games/chess.cxx
     src/network.cxx
     src/mcts.cxx
     src/trainer.cxx
@@ -120,8 +117,8 @@ target_link_libraries(explorer
 )
 
 # Add play executable
-add_executable(play src/play.cxx)
-target_link_libraries(play 
+add_executable(play_tictactoe src/play_tictactoe.cxx)
+target_link_libraries(play_tictactoe 
     PRIVATE 
     deeprlzero_lib 
     ${TORCH_LIBRARIES}
@@ -148,11 +145,11 @@ set_target_properties(explorer PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
-set_target_properties(play PROPERTIES
+set_target_properties(play_tictactoe PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
 enable_profiling(deeprlzero_lib)
 enable_profiling(train_deeprlzero)
 enable_profiling(explorer)
-enable_profiling(play)
+enable_profiling(play_tictactoe)

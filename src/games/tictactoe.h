@@ -1,58 +1,47 @@
 #ifndef GAMES_TICTACTOE_H
 #define GAMES_TICTACTOE_H
 
-#include "game.h"
+#include <vector>
+#include <memory>
+#include <torch/torch.h>
+
+#include "concepts.h"
+#include "traits.h"
 
 namespace deeprlzero {
 
-class TicTacToe : public Game {
- public:
-  static constexpr int kBoardSize = 3;
-  static constexpr int kNumActions = 9;
-  static constexpr int kNumChannels = 3;
-  
-  TicTacToe();
-  
-  virtual std::vector<int> GetValidMoves() const override;
-  void MakeMove(int move) override;
-  void Reset() override;
-  float GetGameResult() const override;
-  bool IsTerminal() const override;
-  int GetCurrentPlayer() const override { return current_player_; }
-  torch::Tensor GetCanonicalBoard() const override;
-  std::unique_ptr<Game> Clone() const override;
-  int GetActionSize() const override { return kNumActions; }
-  int GetInputChannels() const override { return kNumChannels; }
-  void UndoMove(int move) override;
+class TicTacToe {
+public:
+    using Traits = GameTraits<TicTacToe>;
+    TicTacToe();
+    std::vector<int> GetValidMoves() const;
+    void MakeMove(int move);
+    float GetGameResult() const;
+    bool IsTerminal() const;
+    bool CheckWin(int player) const;
+    torch::Tensor GetCanonicalBoard() const;
+    TicTacToe Clone() const;
+    void UndoMove(int move);
+    void Reset();
+    int GetCurrentPlayer() const { return current_player_; }
+    
+    // Methods from traits
+    int GetActionSize() const { return Traits::kNumActions; }
+    int GetInputChannels() const { return Traits::kNumChannels; }
+    int GetNumActions() const { return Traits::kNumActions; }
+    
+    // Display methods
+    std::string ToString() const;
+    std::string GetBoardString() const;
+    void SetFromString(const std::string& str, int player);
 
-  // Add visualization method
-  std::string ToString() const {
-    std::string result;
-    for (int i = 0; i < kBoardSize; ++i) {
-      for (int j = 0; j < kBoardSize; ++j) {
-        switch (board_[i][j]) {
-          case 1: result += " X "; break;
-          case -1: result += " O "; break;
-          case 0: result += " . "; break;
-        }
-      }
-      result += "\n";
-    }
-    return result;
-  }
-
-  std::string GetBoardString() const;
-  void SetFromString(const std::string& boardStr, int player);
-
- private:
-  std::array<std::array<int, kBoardSize>, kBoardSize> board_;
-  int current_player_;
-  
-  bool CheckWin(int player) const;
-  bool IsBoardFull() const;
-  
+private:
+    Traits::BoardType board_;
+    int current_player_ = 1;
+    bool IsBoardFull() const;
 };
 
-}
+static_assert(GameConcept<TicTacToe>);
 
+}
 #endif

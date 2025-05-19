@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "config.h"
-#include "games/game.h"
+#include "games/variant.h"
 #include "network.h"
 
 namespace deeprlzero {
@@ -54,24 +54,24 @@ class MCTS {
  public:
   MCTS(std::shared_ptr<NeuralNetwork> network, const Config& config);
 
-  std::vector<float> GetActionProbabilities(const Game* state,
+  std::vector<float> GetActionProbabilities(const GameVariant& state,
                                             float temperature = 1.0f);
-  int SelectMove(const Game* state, float temperature);
+  int SelectMove(const GameVariant& state, float temperature);
 
   void ResetRoot();
 
   Node* GetRoot() const { return root_.get(); }
 
   float Backpropagate(Node* node, float value);
-  void Search(const Game* state, Node* node);
-  float FullSearch(const Game* state, Node* node);
-  void AddDirichletNoiseToRoot(const Game* state);
+  void Search(const GameVariant& state, Node* node);
+  float FullSearch(const GameVariant& state, Node* node);
+  void AddDirichletNoiseToRoot(const GameVariant& state);
   
  private:
-  std::pair<int, Node*> SelectAction(Node* node, const Game* state);
-  void ExpandNode(Node* node, const Game* state);
+  std::pair<int, Node*> SelectAction(Node* node, const GameVariant& state);
+  void ExpandNode(Node* node, const GameVariant& state);
 
-  std::pair<std::vector<float>, float> GetPolicyValue(const Game* state);
+  std::pair<std::vector<float>, float> GetPolicyValue(const GameVariant& state);
 
   std::shared_ptr<NeuralNetwork> network_;
   const Config& config_;
