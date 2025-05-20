@@ -78,9 +78,13 @@ link_directories(${TORCH_PATH}/lib)
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
+# Add chess subdirectory
+add_subdirectory(src/games/chess)
+
 # Source files for the main library
 set(SOURCES
     src/games/tictactoe.cxx
+    src/games/chess.cxx
     src/network.cxx
     src/mcts.cxx
     src/trainer.cxx
@@ -93,6 +97,7 @@ target_link_libraries(deeprlzero_lib
     ${TORCH_LIBRARIES}
     OpenMP::OpenMP_CXX
     ${CUDA_LIBRARIES}
+    chess
 )
 target_include_directories(deeprlzero_lib 
     PRIVATE 

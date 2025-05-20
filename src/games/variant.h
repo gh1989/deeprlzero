@@ -12,11 +12,12 @@
 #include "traits.h"
 
 #include "tictactoe.h"
+#include "chess.h"
 
 namespace deeprlzero {
 
 // Type-erased variant of all game types
-using GameVariant = std::variant<TicTacToe>;
+using GameVariant = std::variant<TicTacToe, Chess>;
 
 // State observation
 template <typename G>
