@@ -301,3 +301,9 @@ bool checkLegal(const State& state, Move move)
 
 	return true;
 }
+
+bool isInsufficientMaterial(const State& state)
+{
+	//todo...
+	return false;
+}

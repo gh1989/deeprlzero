@@ -138,6 +138,10 @@ bool get_turn(const std::string& fen) {
     return (fen.substr(pos+1, 1) != "w");
 }
 
+std::string StateToFen(const State& state) {
+    return "";
+}
+
 State StateFromFen(std::string fen) 
 {
 	State state;

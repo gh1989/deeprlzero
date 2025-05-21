@@ -6,7 +6,7 @@
 #include "types.h"
 
 /* type: Move */
-typedef unsigned short Move;
+using Move = unsigned short;
 
 constexpr unsigned short to_bits = 6;
 constexpr unsigned short flag_bits = 12;

@@ -36,5 +36,6 @@ bool isCheck(const State& state, bool blackIsAttacking);
 bool isBitboardAttacked(const Bitboard& bitboard, const State& state, bool blackIsAttacking);
 
 bool checkLegal(const State& state, Move move);
+bool isInsufficientMaterial(const State& state);
 
 #endif

@@ -147,8 +147,10 @@ inline G Clone(const G& game) {
     return game.Clone();
 }
 
-inline GameVariant Clone(const GameVariant& game) {
-    return std::visit([](auto&& arg) { return arg.Clone(); }, game);
+GameVariant Clone(const GameVariant& game) {
+    return std::visit([](const auto& g) -> GameVariant {
+        return g.Clone();
+    }, game);
 }   
 
 template <typename G>

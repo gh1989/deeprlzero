@@ -20,5 +20,6 @@ std::string AsUci(Move move);
 void PrettyPrint(const State& state);
 
 State StateFromFen(std::string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+std::string StateToFen(const State& state) ;
 
 #endif
