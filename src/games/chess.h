@@ -23,80 +23,85 @@
 
 namespace deeprlzero {
 
-/*   class: BitBoard */
+class State;
+using Move = unsigned short;
+
+class Chess {
+public:
+    using Traits = GameTraits<Chess>;
+    
+    Chess();
+    std::vector<int> GetValidMoves() const;
+    void MakeMove(int action_index);
+    float GetGameResult() const;
+    bool IsTerminal() const;
+    bool CheckWin(int player) const;
+    torch::Tensor GetCanonicalBoard() const;
+    Chess Clone() const;
+    void UndoMove(int action_index);
+    void Reset();
+    int GetCurrentPlayer() const;
+    
+    // Methods from traits
+    int GetActionSize() const { return Traits::kNumActions; }
+    int GetInputChannels() const { return Traits::kNumChannels; }
+    int GetNumActions() const { return Traits::kNumActions; }
+    
+    // Display methods
+    std::string ToString() const;
+    std::string GetBoardString() const;
+    void SetFromString(const std::string& fen_str, int player=-1);
+
+    // Helper methods
+    int MoveToIndex(const Move& move) const;
+    Move IndexToMove(int action_index) const;
+    bool IsCheckmate() const;
+    bool IsStalemate() const;
+    bool IsDraw() const;
+    void UpdateGameStatus();
+
+private:
+    std::unique_ptr<State> state_;
+    std::vector<Move> move_history_;
+    bool game_over_ = false;
+    int result_ = 0;
+};
+
+static_assert(GameConcept<Chess>);
+
+/// Implementations
+/// Bitboards and iteration over them
 struct Bitboard
 {
   Bitboard() : bit_number(0) {}
   Bitboard(uint64_t bit_number_) : bit_number(bit_number_) {}
-
-  bool operator==(const Bitboard& other) const {
-    return bit_number == other.bit_number;
-  }
-
-  Bitboard operator<<(int x) const {
-    return Bitboard(bit_number << x);
-  }
-
-  Bitboard operator~() const {
-    return Bitboard(~bit_number);
-  }
-
-  Bitboard operator>>(int x) const {
-    return Bitboard(bit_number >> x);
-  }
-
-  Bitboard operator| (const Bitboard& other) const {
-    return Bitboard(bit_number | other.bit_number);
-  }
-
-  Bitboard& operator|=(const Bitboard& other) {
-    bit_number |= other.bit_number;
-    return *this;
-  }
-
-  Bitboard operator& (const Bitboard& other) const {
-    return Bitboard(bit_number & other.bit_number);
-  }
-
-  Bitboard operator^ (const Bitboard& other) const {
-    return Bitboard(bit_number ^ other.bit_number);
-  }
-
-  Bitboard operator- (int value) const {
-    return bit_number - value;
-  }
-
-  void operator &= (const Bitboard& other) {
-    bit_number &= other.bit_number;
-  }
-
-  operator bool() const {
-    return bit_number != 0;
-  }
-
-  uint64_t PopCnt() const {
-    return std::popcount(bit_number);
-  }
-
-  uint8_t nMSB()
-  {
+  bool operator==(const Bitboard& other) const {return bit_number == other.bit_number; }
+  Bitboard operator<<(int x) const { return Bitboard(bit_number << x); }
+  Bitboard operator~() const { return Bitboard(~bit_number); }
+  Bitboard operator>>(int x) const { return Bitboard(bit_number >> x); }
+  Bitboard operator| (const Bitboard& other) const { return Bitboard(bit_number | other.bit_number); }
+  Bitboard& operator|=(const Bitboard& other) { bit_number |= other.bit_number; return *this; }
+  Bitboard operator& (const Bitboard& other) const { return Bitboard(bit_number & other.bit_number); }
+  Bitboard operator^ (const Bitboard& other) const { return Bitboard(bit_number ^ other.bit_number); }
+  Bitboard operator- (int value) const { return Bitboard(bit_number - value); }
+  void operator &= (const Bitboard& other) { bit_number &= other.bit_number; }
+  operator bool() const { return bit_number != 0; }
+  uint64_t PopCnt() const { return std::popcount(bit_number); }
+  uint8_t nMSB() const {
     if (bit_number == 0) return 0;
     uint8_t position = 63;
     while ((bit_number & (1ULL << position)) == 0) position--;  
     return position;
   }
-
   uint8_t nLSB() const {
     if (bit_number == 0) return 64;
     uint8_t position = 0;
     while ((bit_number & (1ULL << position)) == 0) position++;
     return position;
   }
-
   uint64_t bit_number;
 };
-
-/* class: BitIterator */
+/// ...Iterations
 class BitIterator {
 public:
     BitIterator(Bitboard value, uint8_t index) : value_(value), index_(index) {};
@@ -112,13 +117,12 @@ public:
       }
 }  
 
-    unsigned int operator*() const { return index_; }
+  unsigned int operator*() const { return index_; }
 private:
-    Bitboard value_;
-    uint8_t index_;
+  Bitboard value_;
+  uint8_t index_;
 };
-
-/* create a BitIterator range for a Bitboard */
+/// ...Range
 class BitboardRange {
 public:
     BitboardRange(Bitboard bb) : bb_(bb) {};
@@ -128,6 +132,7 @@ private:
     Bitboard bb_;
 };
 
+/// Introduce squares, pieces, properties of moves
 enum Square
 {
   a1 = 0, b1, c1, d1, e1, f1, g1, h1,
@@ -144,7 +149,7 @@ enum Piece { KNIGHT, BISHOP, ROOK, QUEEN, KING, PAWN, NUMBER_PIECES, NO_PIECE = 
 enum Castling { WQ = 1, WK = 2, BQ = 4, BK = 8, ALL = 15 };
 enum SpecialMove { NONE = 0, ENPASSANT = 1, CASTLE = 2, PROMOTE = 3 };
 
-/* Square operations */
+/// Squares interfacing with bitboards
 Bitboard GetSquare(Square sqr);
 template<typename Square, typename... SqArgs>
 static Bitboard GetSquare(Square sqr, SqArgs... others) { return GetSquare(sqr) | GetSquare(others...); }
@@ -155,7 +160,7 @@ Bitboard OnBit(Bitboard bb, Square on);
 Square BbSqr(Bitboard bb);
 Bitboard SqrBb(Square sqr);
 
-/* type: Move */
+/// ... Moves
 typedef unsigned short Move;
 constexpr unsigned short to_bits = 6;
 constexpr unsigned short flag_bits = 12;
@@ -165,7 +170,7 @@ constexpr unsigned short to_mask = 63 << to_bits;
 constexpr unsigned short flag_mask = 3 << flag_bits;
 constexpr unsigned short prom_mask = 3 << prom_bits;
 
-/* Move operations*/
+/// Operations on moves
 Square GetFrom(Move move);
 Square GetTo(Move move);
 SpecialMove SpecialMoveType(Move move);
@@ -175,8 +180,9 @@ Move CreateMove(Square from, Square to);
 Move CreatePromotion(Square from, Square to, Piece promo);
 Move CreateEnPassant(Square from, Square to);
 Move CreateCastle(Square from, Square to);
+Move MoveFromUci(const std::string& uci_move);
 
-/* class: State */
+/// The game's state.
 class State
 {
 private:
@@ -198,7 +204,7 @@ public:
 
     Bitboard getBitboard(int index) const { return bbs[index]; }
     void setBitboard(int index, Bitboard value) { bbs[index] = value; }
-  void addToBitboard(int index, Bitboard toAdd) { bbs[index] |= toAdd; }
+    void addToBitboard(int index, Bitboard toAdd) { bbs[index] |= toAdd; }
     uint8_t getMoveCount() const { return plies / 2; }
     void setMoveCount(uint8_t value) { plies = value; }
     uint8_t getCastleRights() const { return castle; }
@@ -210,21 +216,21 @@ public:
     void setTurn(bool value) { blackMove = value; }
     uint32_t getPlies() const { return plies; }
     void setPlies(uint32_t value) { plies = value; }
-  uint8_t get50MoveCount() const { return c50; }
+    uint8_t get50MoveCount() const { return c50; }
     bool isBlackMove() const { return blackMove; }
     void setBlackMove(bool value) { blackMove = value; }
-  Bitboard enemyOccupation() const { return blackMove ? whiteOccupation() : blackOccupation(); };
-  Bitboard moveOccupation() const { return blackMove ? blackOccupation() : whiteOccupation(); }
-  Bitboard blackOccupation() const { return combinedBoards(bbs+NUMBER_PIECES, bbs+NUMBER_PIECES*2); }
-  Bitboard whiteOccupation() const { return combinedBoards(bbs, bbs+NUMBER_PIECES); }
-  template<Piece _Piece> 
-  Bitboard movePiece() const   { return bbs[moveBitStart() + _Piece];}
-  template<Piece _Piece>
-  Bitboard enemyPiece() const { return bbs[enemyBitStart() + _Piece];  }
-  template<Piece _Piece>
-  Bitboard whitePiece() const { return bbs[_Piece]; }
-  template<Piece _Piece>
-  Bitboard blackPiece() const { return bbs[NUMBER_PIECES+_Piece]; }
+    Bitboard enemyOccupation() const { return blackMove ? whiteOccupation() : blackOccupation(); };
+    Bitboard moveOccupation() const { return blackMove ? blackOccupation() : whiteOccupation(); }
+    Bitboard blackOccupation() const { return combinedBoards(bbs+NUMBER_PIECES, bbs+NUMBER_PIECES*2); }
+    Bitboard whiteOccupation() const { return combinedBoards(bbs, bbs+NUMBER_PIECES); }
+    template<Piece _Piece> 
+    Bitboard movePiece() const   { return bbs[moveBitStart() + _Piece];}
+    template<Piece _Piece>
+    Bitboard enemyPiece() const { return bbs[enemyBitStart() + _Piece];  }
+    template<Piece _Piece>
+    Bitboard whitePiece() const { return bbs[_Piece]; }
+    template<Piece _Piece>
+    Bitboard blackPiece() const { return bbs[NUMBER_PIECES+_Piece]; }
 
 private:
   uint8_t moveBitStart() const { return blackMove ? NUMBER_PIECES : 0; };
@@ -237,93 +243,41 @@ private:
   }
 };
 
-/* UCI and string operations*/
+/// String operations and UCI
 const std::string piece_strings[6] = { "n", "b", "r", "q", "k", "p" };
 std::string PieceStringLower(Piece piece);
 std::string SquareName(Square sqr);
 Bitboard BitboardFromString(std::string str);
-
-// Move as uci string
 std::string AsUci(Move move);
-
-/* Debugging, printing out */
 void PrettyPrint(const State& state);
 State StateFromFen(std::string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+std::string StateToFen(const State& state);
+
+/// The generation of moves.
 using TMoveContainer = std::list<Move>;
-
-/* Move generation */
 TMoveContainer GenerateMoves(const State&);
-
 void PawnMoves(
   const State& state,
   TMoveContainer &moves);
-
 template <Piece _Piece>
 void JumperMoves(
     const State& state,
   TMoveContainer &moves);
-
 template <Piece _Piece>
 void KnightMoves(
     const State& state,
   TMoveContainer &moves);
-
 void KingCastling(
   const State& state,
   TMoveContainer &moves);
 
-class Chess {
-public:
-    using Traits = GameTraits<Chess>;
-    
-    Chess();
-    std::vector<int> GetValidMoves() const;
-    void MakeMove(int action_index);
-    float GetGameResult() const;
-    bool IsTerminal() const;
-    bool CheckWin(int player) const;
-    torch::Tensor GetCanonicalBoard() const;
-    Chess Clone() const;
-    void UndoMove(int action_index);
-    void Reset();
-    int GetCurrentPlayer() const { return state_.isBlackMove() ? -1 : 1; }
-    
-    // Methods from traits
-    int GetActionSize() const { return Traits::kNumActions; }
-    int GetInputChannels() const { return Traits::kNumChannels; }
-    int GetNumActions() const { return Traits::kNumActions; }
-    
-    // Display methods
-    std::string ToString() const;
-    std::string GetBoardString() const;
-    void SetFromString(const std::string& fen_str, int player);
-
-private:
-    State state_;
-    std::vector<Move> move_history_;
-    bool game_over_ = false;
-    int result_ = 0; // 0 for draw, 1 for white win, -1 for black win
-    
-    // Helper methods
-    int MoveToIndex(const Move& move) const;
-    Move IndexToMove(int action_index) const;
-    bool IsCheckmate() const;
-    bool IsStalemate() const;
-    bool IsDraw() const;
-    void UpdateGameStatus();
-};
-
-std::string StateToFen(const State& state);
-
-static_assert(GameConcept<Chess>);
-
+/// Helpers and utilities for move generation.
 bool SquareConnectedToBitboard(
   Square source,
   Bitboard target,
   Bitboard obstacle,
   const std::array<std::pair<int, int>, 4>& directions);
 
-// Reflect a square
 inline Square Reflect(Square sqr)
 {
   int square_int = static_cast<int>(sqr);
@@ -332,12 +286,10 @@ inline Square Reflect(Square sqr)
   return output;
 }
 
-// Directions the rook can move
 static inline const std::array<std::pair<int, int>, 4> rook_directions {
   std::make_pair(1, 0), std::make_pair(-1, 0), std::make_pair(0, 1), std::make_pair(0, -1)
 };
 
-// Directions the bishop can move
 static inline const std::array<std::pair<int, int>, 4> bishop_directions {
   std::make_pair(1, 1), std::make_pair(-1, 1), std::make_pair(1, -1), std::make_pair(-1, -1)
 };
@@ -346,7 +298,7 @@ inline bool isInsufficientMaterial(const State& state) {
     return false;
 }
 
-/* Bitboards */
+/// Bitboard maps
 static const Bitboard neighbours[64] = {
   0x0000000000000302ULL,  0x0000000000000705ULL,  0x0000000000000e0aULL, 0x0000000000001c14ULL,
   0x0000000000003828ULL,  0x0000000000007050ULL,  0x000000000000e0a0ULL, 0x000000000000c040ULL,
@@ -549,6 +501,7 @@ static const Bitboard antidiagonals[64] = {
   0x0080000000000000ULL,  0x0000000000000000ULL,
 };
 
+/// Square lookup
 static const std::map<unsigned long long, Square> square_lookup = {
   { 0x0000000000000001ULL, a1 },
   { 0x0000000000000002ULL, b1 },

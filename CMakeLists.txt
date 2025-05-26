@@ -81,7 +81,6 @@ include_directories(${CMAKE_SOURCE_DIR}/src)
 set(SOURCES
     src/games/tictactoe.cxx
     src/games/chess.cxx
-    src/games/variant.cxx
     src/network.cxx
     src/mcts.cxx
     src/trainer.cxx
@@ -107,8 +106,16 @@ target_link_libraries(train_deeprlzero
     OpenMP::OpenMP_CXX
 )
 
-add_executable(explorer src/explorer.cxx)
-target_link_libraries(explorer 
+add_executable(explorer_tictactoe src/explorers/tictactoe.cxx)
+target_link_libraries(explorer_tictactoe 
+    PRIVATE 
+    deeprlzero_lib 
+    ${TORCH_LIBRARIES}
+    OpenMP::OpenMP_CXX
+)
+
+add_executable(explorer_chess src/explorers/chess.cxx)
+target_link_libraries(explorer_chess 
     PRIVATE 
     deeprlzero_lib 
     ${TORCH_LIBRARIES}
@@ -116,7 +123,7 @@ target_link_libraries(explorer
 )
 
 # Add play executable
-add_executable(play_tictactoe src/play_tictactoe.cxx)
+add_executable(play_tictactoe src/play/play_tictactoe.cxx)
 target_link_libraries(play_tictactoe 
     PRIVATE 
     deeprlzero_lib 
@@ -140,7 +147,11 @@ set_target_properties(train_deeprlzero PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
-set_target_properties(explorer PROPERTIES
+set_target_properties(explorer_tictactoe PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+
+set_target_properties(explorer_chess PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
@@ -150,5 +161,6 @@ set_target_properties(play_tictactoe PROPERTIES
 
 enable_profiling(deeprlzero_lib)
 enable_profiling(train_deeprlzero)
-enable_profiling(explorer)
+enable_profiling(explorer_tictactoe)
+enable_profiling(explorer_chess)
 enable_profiling(play_tictactoe)

@@ -18,48 +18,51 @@
 
 namespace deeprlzero {
 
-template <typename GameType>
-requires GameConcept<GameType>
-void Train(std::shared_ptr<torch::optim::Optimizer> optimizer, 
-           std::shared_ptr<NeuralNetwork> network, 
-           const Config& config, 
-           const GamePositions& positions);
+void Train(
+  std::shared_ptr<torch::optim::Optimizer> optimizer, 
+  std::shared_ptr<NeuralNetwork> network, 
+  const Config& config, 
+  const GamePositions& positions);
 
 // Evaluation functions
-template <typename GameType>
-requires GameConcept<GameType>
-EvaluationStats EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> network,
-                                      std::shared_ptr<NeuralNetwork> opponent,
-                                      const Config& config);
+template <typename ExplicitVariant>
+requires GameConcept<ExplicitVariant>
+EvaluationStats EvaluateAgainstNetwork(
+  std::shared_ptr<NeuralNetwork> network,
+  std::shared_ptr<NeuralNetwork> opponent,
+  const Config& config);
 
-template <typename GameType>
-requires GameConcept<GameType>
-EvaluationStats EvaluateAgainstRandom(std::shared_ptr<NeuralNetwork> network,
-                                     const Config& config);
-
-// Network acceptance function
-bool AcceptOrRejectNewNetwork(std::shared_ptr<NeuralNetwork> network,
-                             std::shared_ptr<NeuralNetwork> candidate_network,
-                             const EvaluationStats& stats,
-                             const Config& config);
+template <typename ExplicitVariant>
+requires GameConcept<ExplicitVariant>
+EvaluationStats EvaluateAgainstRandom(
+  std::shared_ptr<NeuralNetwork> network,
+  const Config& config);
 
 // Helper functions
-bool IsIdenticalNetwork(std::shared_ptr<NeuralNetwork> network1,
-                       std::shared_ptr<NeuralNetwork> network2);
+bool AcceptOrRejectNewNetwork(
+  std::shared_ptr<NeuralNetwork> network,
+  std::shared_ptr<NeuralNetwork> candidate_network,
+  const EvaluationStats& stats,
+  const Config& config);
 
-torch::Tensor ComputePolicyLoss(const torch::Tensor& policy_preds,
-                               const torch::Tensor& policy_targets);
+bool IsIdenticalNetwork(
+  std::shared_ptr<NeuralNetwork> network1,
+  std::shared_ptr<NeuralNetwork> network2);
 
-torch::Tensor ComputeValueLoss(const torch::Tensor& value_preds,
-                              const torch::Tensor& value_targets);
+torch::Tensor ComputePolicyLoss(
+  const torch::Tensor& policy_preds,
+  const torch::Tensor& policy_targets);
 
-// Network creation/loading functions
+torch::Tensor ComputeValueLoss(
+  const torch::Tensor& value_preds,
+  const torch::Tensor& value_targets);
+
 std::shared_ptr<NeuralNetwork> CreateInitialNetwork(const Config& config);
 std::shared_ptr<NeuralNetwork> LoadBestNetwork(const Config& config);
 
-}  // namespace deeprlzero
+} 
 
-// Include template implementations
+/// Template implementations
 #include "trainer.inl"
 
 #endif

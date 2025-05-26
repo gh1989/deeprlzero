@@ -11,6 +11,7 @@
 #include <format>
 
 using namespace deeprlzero;
+using Game = Chess;
 
 // A run using the tic tac toe
 int main(int argc, char** argv) {
@@ -49,12 +50,12 @@ int main(int argc, char** argv) {
       logger.LogFormat("Starting iteration {}/{}", iter + 1, config.num_iterations);
       GamePositions positions;
       if (config.exhaustive_self_play) {
-        positions = AllEpisodes<Chess>();
+        positions = AllEpisodes<Game>();
       }
       else if (config.num_threads > 1) {
-        positions = ExecuteEpisodesParallel<Chess>(best_network, config);
+        positions = ExecuteEpisodesParallel<Game>(best_network, config);
       } else {
-        positions = ExecuteEpisode<Chess>(best_network, config);
+        positions = ExecuteEpisode<Game>(best_network, config);
       }
       logger.LogFormat("Collected {} game positions from self-play", positions.boards.size());
 
@@ -69,10 +70,10 @@ int main(int argc, char** argv) {
       }
 
       /// train - then accept/reject
-      Train<Chess>(optimizer, network_to_train, config, positions);
+      Train(optimizer, network_to_train, config, positions);
                       
       EvaluationStats evaluation_stats = 
-          EvaluateAgainstNetwork<Chess>(network_to_train, best_network, config);
+          EvaluateAgainstNetwork<Game>(network_to_train, best_network, config);
           
       bool network_accepted = 
           AcceptOrRejectNewNetwork(network_to_train, best_network, evaluation_stats, config );
@@ -88,7 +89,7 @@ int main(int argc, char** argv) {
       /// every 5 iterations evaluation against random and 
       /// log the results
       logger.Log("Evaluating against random network ...");
-      EvaluateAgainstRandom<Chess>(best_network, config);
+      EvaluateAgainstRandom<Game>(best_network, config);
   }
   
   logger.Log("Training complete!");

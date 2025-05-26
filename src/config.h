@@ -60,7 +60,8 @@ class Config {
     for (int i = 1; i < argc; i++) {
       std::string arg = argv[i];
 
-      if (i + 1 >= argc) {
+      // Check if we have a value for this argument
+      if (i + 1 >= argc && arg != "-x" && arg != "--exhaustive" && arg != "-h" && arg != "--help") {
         std::cerr << "Missing value for argument: " << arg << std::endl;
         exit(1);
       }
@@ -69,7 +70,7 @@ class Config {
         config.num_filters = std::stoi(argv[++i]);
       } else if (arg == "-r" || arg == "--residual-blocks") {
         config.num_residual_blocks = std::stoi(argv[++i]);
-      } else if (arg == "-l" || arg == "--learning-rate") {
+      } else if (arg == "--learning-rate") {
         config.learning_rate = std::stof(argv[++i]);
       } else if (arg == "-s" || arg == "--simulations") {
         config.num_simulations = std::stoi(argv[++i]);
@@ -85,7 +86,7 @@ class Config {
         config.num_epochs = std::stoi(argv[++i]);
       } else if (arg == "-i" || arg == "--iterations") {
         config.num_iterations = std::stoi(argv[++i]);
-      } else if (arg == "-g" || arg == "--games") {
+      } else if (arg == "--games") {
         config.episodes_per_iteration = std::stoi(argv[++i]);
       } else if (arg == "-x" || arg == "--exhaustive") {
         config.exhaustive_self_play = true;
@@ -93,13 +94,13 @@ class Config {
         config.model_path = argv[++i];
       } else if (arg == "-n" || arg == "--eval-games") {
         config.num_evaluation_games = std::stoi(argv[++i]);
-      } else if (arg == "-l" || arg == "--loss-threshold") {
+      } else if (arg == "--loss-threshold") {
         config.loss_threshold = std::stof(argv[++i]);
-      } else if (arg == "-x" || arg == "--threads") {
+      } else if (arg == "--threads") {
         config.num_threads = std::stoi(argv[++i]);
       } else if (arg == "-a" || arg == "--acceptance-threshold") {
         config.acceptance_threshold = std::stof(argv[++i]);
-      } else if (arg == "-g" || arg == "--gamma-alpha") {
+      } else if (arg == "--gamma-alpha") {
         config.gamma_alpha = std::stof(argv[++i]);
       } else if (arg == "-o" || arg == "--training-batch-size") {
         config.training_batch_size = std::stoi(argv[++i]);

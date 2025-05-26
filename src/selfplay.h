@@ -10,40 +10,18 @@
 
 namespace deeprlzero {
 
-inline float CalculateAverageExplorationMetric(const std::vector<GamePositions>& episodes) {
-  if (episodes.empty()) {
-    return 0.0f;
-  }
-  
-  float total_entropy = 0.0f;
-  int total_moves = 0;
-  
-  for (const auto& episode : episodes) {
-    for (const auto& policy : episode.policies) {
-      total_entropy += CalculatePolicyEntropy(policy);
-      total_moves++;
-    }
-  }
-  Logger& logger = Logger::GetInstance();
-  float exploration_metric = total_entropy / total_moves; 
-  logger.LogFormat("Exploration metric: {:.4f}", exploration_metric);
-  return exploration_metric;
-}
-
-template <typename GameVariant>
-requires GameConcept<GameVariant> 
+template <typename ExplicitVariant>
+requires GameConcept<ExplicitVariant>
 GamePositions ExecuteEpisode(std::shared_ptr<NeuralNetwork> network, const Config& config) {
   network->eval();
 
   GamePositions positions;
   MCTS mcts(network, config);
-
-  GameVariant game;
+  GameVariant game = CreateGame<ExplicitVariant>();
 
   while (!IsTerminal(game)) {
     torch::Tensor board = GetCanonicalBoard(game);
-    ///actually let's not.
-    //mcts.AddDirichletNoiseToRoot(game.get());
+    ///mcts.AddDirichletNoiseToRoot(game.get());
     for (int i = 0; i < config.num_simulations; ++i) {
       mcts.Search(game, mcts.GetRoot());
     }
@@ -61,27 +39,20 @@ GamePositions ExecuteEpisode(std::shared_ptr<NeuralNetwork> network, const Confi
     mcts.ResetRoot();  
   }
 
-  // Set the values based on game outcome without flipping perspective
+  // Set the values based on game outcome *without* flipping perspective
   float outcome = GetGameResult(game);
   for (size_t i = 0; i < positions.boards.size(); i++) {
     positions.values.push_back(outcome);
   }
-  
-  // TODO: For games like chess, this simple approach won't work well.
-  // We'll need to implement:
-  // 1. Temporal discounting (γ^(T-t)) where future rewards are weighted less
-  // 2. Intermediate value functions based on material/position
-  // 3. TD(λ) or other bootstrapping approaches for long-term rewards
-  // 4. Value targets that decay based on distance from terminal position
 
   return positions;
 }
 
-template <typename GameVariant>
-requires GameConcept<GameVariant>
+template <typename ExplicitVariant>
+requires GameConcept<ExplicitVariant>
 GamePositions ExecuteEpisodesParallel(std::shared_ptr<NeuralNetwork> network, const Config& config) {
   // First, run a sample episode to estimate position count
-  auto sample = ExecuteEpisode<GameVariant>(network, config);
+  auto sample = ExecuteEpisode<ExplicitVariant>(network, config);
   int estimated_positions_per_episode = sample.boards.size();
   
   // Calculate total threads and distribution
@@ -114,7 +85,7 @@ GamePositions ExecuteEpisodesParallel(std::shared_ptr<NeuralNetwork> network, co
     threads.push_back(std::thread([network, config, i, thread_episodes = thread_episode_counts[i], 
                                   &thread_results]() {
       for (int j = 0; j < thread_episodes; ++j) {
-        thread_results[i].Append(ExecuteEpisode<GameVariant>(network, config));
+        thread_results[i].Append(ExecuteEpisode<ExplicitVariant>(network, config));
       }
     }));
   }
@@ -130,8 +101,8 @@ GamePositions ExecuteEpisodesParallel(std::shared_ptr<NeuralNetwork> network, co
   return all_positions;
 }
 
-template <typename GameVariant>
-requires GameConcept<GameVariant>
+template <typename ExplicitVariant>
+requires GameConcept<ExplicitVariant>
 GamePositions AllEpisodes() {  
   GamePositions all_positions;
   std::map<std::string, float> minimax_values;
@@ -201,15 +172,35 @@ GamePositions AllEpisodes() {
     return best_value;
   };
 
-  GameVariant initial_game;
+  GameVariant initial_game = CreateGame<ExplicitVariant>();
   std::vector<float> initial_policy;
   exploreMinimax(initial_game, initial_policy);
   
-  const int expected_total_positions = 5478; 
-  const int expected_non_terminal_positions = 4520; 
+  const int expected_total_positions = 5478; //this is for tic-tac-toe
+  const int expected_non_terminal_positions = 4520; // ... 
   assert(minimax_values.size() == expected_total_positions );
   assert(all_positions.boards.size() == expected_non_terminal_positions);
   return all_positions;
+}
+
+inline float CalculateAverageExplorationMetric(const std::vector<GamePositions>& episodes) {
+  if (episodes.empty()) {
+    return 0.0f;
+  }
+  
+  float total_entropy = 0.0f;
+  int total_moves = 0;
+  
+  for (const auto& episode : episodes) {
+    for (const auto& policy : episode.policies) {
+      total_entropy += CalculatePolicyEntropy(policy);
+      total_moves++;
+    }
+  }
+  Logger& logger = Logger::GetInstance();
+  float exploration_metric = total_entropy / total_moves; 
+  logger.LogFormat("Exploration metric: {:.4f}", exploration_metric);
+  return exploration_metric;
 }
 
 }

@@ -50,7 +50,7 @@ std::vector<float> MCTS::GetActionProbabilities(const GameVariant& state,
 }
 
 void MCTS::Search(const GameVariant& state, Node* node) {
-  GameVariant mutable_state = Clone(state);
+  auto mutable_state = Clone(state);
 
   if (IsTerminal(mutable_state)) {
     float value = GetGameResult(mutable_state);
@@ -128,18 +128,21 @@ float MCTS::Backpropagate(Node* node, float value) {
 }
 
 std::pair<std::vector<float>, float> MCTS::GetPolicyValue(const GameVariant& state) {
+
+  // move to device and forward pass
   auto device = network_->parameters().begin()->device();
   auto state_tensor = GetCanonicalBoard(state).unsqueeze(0).to(device);
   auto [policy_tensor, value_tensor] = network_->forward(state_tensor);
+ 
+  // Verify tensor validity
   policy_tensor = policy_tensor.to(torch::kCPU).contiguous();
   value_tensor = value_tensor.to(torch::kCPU).contiguous();
-
-  // Verify tensor validity
   if (!policy_tensor.defined() || policy_tensor.numel() == 0) {
     throw std::runtime_error("Invalid policy tensor");
   }
 
-  auto policy_accessor = policy_tensor.accessor<float, 2>();
+  // "template accessor" is a way to access the tensor data in a type-safe manner
+  auto policy_accessor = policy_tensor.template accessor<float, 2>(); 
   std::vector<float> policy(
       policy_accessor[0].data(),
       policy_accessor[0].data() + policy_accessor.size(1));
@@ -166,7 +169,7 @@ int MCTS::SelectMove(const GameVariant& state, float temperature) {
     assert(best_move != -1 && "Must find a valid move");
     return best_move;
   } else {
-    // Temperature sampling remains unchanged
+
     std::vector<float> valid_probs;
     valid_probs.reserve(valid_moves.size());
     for (int move : valid_moves) {
@@ -236,8 +239,7 @@ float MCTS::FullSearch(const GameVariant& state, Node* node) {
     GameVariant new_state = Clone(state);
     MakeMove(new_state, child_ptr->action);
 
-    // Using negamax: the value for the child is the negative of FullSearch on
-    // the new state.
+    /// Negamax
     float child_value = -FullSearch(new_state, child_ptr.get());
 
     if (child_value > best_value) {
@@ -276,8 +278,7 @@ void MCTS::AddDirichletNoiseToRoot(const GameVariant& state) {
     int move = valid_moves[i];
     if (root_->children[move]) {
       float normalized_noise = noise[i] / noise_sum;
-      root_->children[move]->prior = (1.0f - noise_weight) * root_->children[move]->prior 
-                                   + noise_weight * normalized_noise;
+      root_->children[move]->prior = (1.0f - noise_weight) * root_->children[move]->prior + noise_weight * normalized_noise;
     }
   }
 }

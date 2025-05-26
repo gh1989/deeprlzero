@@ -25,7 +25,7 @@ std::vector<int> Chess::GetValidMoves() const {
   }
     
   std::vector<int> valid_action_indices;
-  TMoveContainer legal_moves = GenerateMoves(state_);
+  TMoveContainer legal_moves = GenerateMoves(*state_);
     
   for (const auto& move : legal_moves) {
     valid_action_indices.push_back(MoveToIndex(move));
@@ -40,7 +40,7 @@ void Chess::MakeMove(int action_index) {
   }
     
   Move move = IndexToMove(action_index);
-  TMoveContainer legal_moves = GenerateMoves(state_);
+  TMoveContainer legal_moves = GenerateMoves(*state_);
     
   // Verify move is legal
   bool move_is_legal = false;
@@ -59,7 +59,7 @@ void Chess::MakeMove(int action_index) {
   move_history_.push_back(move);
     
   // Apply move to state
-  state_.Apply(move);
+  state_->Apply(move);
     
   // Update game status
   UpdateGameStatus();
@@ -80,7 +80,7 @@ void Chess::UndoMove(int) {
     
   // Replay all moves except the last one
   for (const auto& move : move_history_) {
-    state_.Apply(move);
+    state_->Apply(move);
   }
     
   // Update game status
@@ -103,6 +103,10 @@ bool Chess::CheckWin(int player) const {
   return (player == 1 && result_ == 1) || (player == -1 && result_ == -1);
 }
 
+int Chess::GetCurrentPlayer() const {
+  return state_->isBlackMove() ? -1 : 1;
+}
+
 torch::Tensor Chess::GetCanonicalBoard() const {
   // Create a tensor with 12 planes for pieces (6 piece types × 2 colors) + 1 plane for player to move
   auto tensor = torch::zeros({Traits::kNumChannels, Traits::kBoardSize, Traits::kBoardSize});
@@ -114,47 +118,47 @@ torch::Tensor Chess::GetCanonicalBoard() const {
       auto sq = i * 8 + j;
             
       // Current player's pieces (first 6 planes)
-      if (!state_.isBlackMove()) {
+      if (!state_->isBlackMove()) {
           // White pieces when white to move  
-          if (state_.whitePiece<PAWN>() & squares[sq]) accessor[0][i][j] = 1.0f;
-          if (state_.whitePiece<KNIGHT>() & squares[sq]) accessor[1][i][j] = 1.0f;
-          if (state_.whitePiece<BISHOP>() & squares[sq]) accessor[2][i][j] = 1.0f;
-          if (state_.whitePiece<ROOK>() & squares[sq]) accessor[3][i][j] = 1.0f;
-          if (state_.whitePiece<QUEEN>() & squares[sq]) accessor[4][i][j] = 1.0f;
-          if (state_.whitePiece<KING>() & squares[sq]) accessor[5][i][j] = 1.0f;
+          if (state_->whitePiece<PAWN>() & squares[sq]) accessor[0][i][j] = 1.0f;
+          if (state_->whitePiece<KNIGHT>() & squares[sq]) accessor[1][i][j] = 1.0f;
+          if (state_->whitePiece<BISHOP>() & squares[sq]) accessor[2][i][j] = 1.0f;
+          if (state_->whitePiece<ROOK>() & squares[sq]) accessor[3][i][j] = 1.0f;
+          if (state_->whitePiece<QUEEN>() & squares[sq]) accessor[4][i][j] = 1.0f;
+          if (state_->whitePiece<KING>() & squares[sq]) accessor[5][i][j] = 1.0f;
       } else {
           // Black pieces when black to move
-          if (state_.blackPiece<PAWN>() & squares[sq]) accessor[0][i][j] = 1.0f;
-          if (state_.blackPiece<KNIGHT>() & squares[sq]) accessor[1][i][j] = 1.0f;
-          if (state_.blackPiece<BISHOP>() & squares[sq]) accessor[2][i][j] = 1.0f;
-          if (state_.blackPiece<ROOK>() & squares[sq]) accessor[3][i][j] = 1.0f;
-          if (state_.blackPiece<QUEEN>() & squares[sq]) accessor[4][i][j] = 1.0f;
-          if (state_.blackPiece<KING>() & squares[sq]) accessor[5][i][j] = 1.0f;
+          if (state_->blackPiece<PAWN>() & squares[sq]) accessor[0][i][j] = 1.0f;
+          if (state_->blackPiece<KNIGHT>() & squares[sq]) accessor[1][i][j] = 1.0f;
+          if (state_->blackPiece<BISHOP>() & squares[sq]) accessor[2][i][j] = 1.0f;
+          if (state_->blackPiece<ROOK>() & squares[sq]) accessor[3][i][j] = 1.0f;
+          if (state_->blackPiece<QUEEN>() & squares[sq]) accessor[4][i][j] = 1.0f;
+          if (state_->blackPiece<KING>() & squares[sq]) accessor[5][i][j] = 1.0f;
       }
             
       // Opponent's pieces (next 6 planes)
-      if (!state_.isBlackMove()) {
+      if (!state_->isBlackMove()) {
           // Black pieces when white to move
-          if (state_.blackPiece<PAWN>() & squares[sq]) accessor[6][i][j] = 1.0f;
-          if (state_.blackPiece<KNIGHT>() & squares[sq]) accessor[7][i][j] = 1.0f;
-          if (state_.blackPiece<BISHOP>() & squares[sq]) accessor[8][i][j] = 1.0f;
-          if (state_.blackPiece<ROOK>() & squares[sq]) accessor[9][i][j] = 1.0f;
-          if (state_.blackPiece<QUEEN>() & squares[sq]) accessor[10][i][j] = 1.0f;
-          if (state_.blackPiece<KING>() & squares[sq]) accessor[11][i][j] = 1.0f;
+          if (state_->blackPiece<PAWN>() & squares[sq]) accessor[6][i][j] = 1.0f;
+          if (state_->blackPiece<KNIGHT>() & squares[sq]) accessor[7][i][j] = 1.0f;
+          if (state_->blackPiece<BISHOP>() & squares[sq]) accessor[8][i][j] = 1.0f;
+          if (state_->blackPiece<ROOK>() & squares[sq]) accessor[9][i][j] = 1.0f;
+          if (state_->blackPiece<QUEEN>() & squares[sq]) accessor[10][i][j] = 1.0f;
+          if (state_->blackPiece<KING>() & squares[sq]) accessor[11][i][j] = 1.0f;
       } else {
           // White pieces when black to move
-          if (state_.whitePiece<PAWN>() & squares[sq]) accessor[6][i][j] = 1.0f;
-          if (state_.whitePiece<KNIGHT>() & squares[sq]) accessor[7][i][j] = 1.0f;
-          if (state_.whitePiece<BISHOP>() & squares[sq]) accessor[8][i][j] = 1.0f;
-          if (state_.whitePiece<ROOK>() & squares[sq]) accessor[9][i][j] = 1.0f;
-          if (state_.whitePiece<QUEEN>() & squares[sq]) accessor[10][i][j] = 1.0f;
-          if (state_.whitePiece<KING>() & squares[sq]) accessor[11][i][j] = 1.0f;
+          if (state_->whitePiece<PAWN>() & squares[sq]) accessor[6][i][j] = 1.0f;
+          if (state_->whitePiece<KNIGHT>() & squares[sq]) accessor[7][i][j] = 1.0f;
+          if (state_->whitePiece<BISHOP>() & squares[sq]) accessor[8][i][j] = 1.0f;
+          if (state_->whitePiece<ROOK>() & squares[sq]) accessor[9][i][j] = 1.0f;
+          if (state_->whitePiece<QUEEN>() & squares[sq]) accessor[10][i][j] = 1.0f;
+          if (state_->whitePiece<KING>() & squares[sq]) accessor[11][i][j] = 1.0f;
       }
     }
   }
     
   // Additional features: Turn indicator
-  if (!state_.isBlackMove()) {
+  if (!state_->isBlackMove()) {
     // White to move
     for (int i = 0; i < Traits::kBoardSize; ++i) {
       for (int j = 0; j < Traits::kBoardSize; ++j) {
@@ -168,7 +172,7 @@ torch::Tensor Chess::GetCanonicalBoard() const {
     
 Chess Chess::Clone() const {
   Chess clone;
-  clone.state_ = state_;
+  clone.state_ = std::make_unique<State>(*state_);
   clone.game_over_ = game_over_;
   clone.result_ = result_;
   clone.move_history_ = move_history_;
@@ -176,7 +180,7 @@ Chess Chess::Clone() const {
 }
 
 std::string Chess::ToString() const {
-  return GetBoardString() + (state_.isBlackMove() ? " (Black to move)" : " (White to move)");
+  return GetBoardString() + (state_->isBlackMove() ? " (Black to move)" : " (White to move)");
 }
 
 std::string StateToFen(const State& state) {
@@ -184,16 +188,11 @@ std::string StateToFen(const State& state) {
 }
 
 std::string Chess::GetBoardString() const {
-  return StateToFen(state_);
+  return StateToFen(*state_);
 }
 
 void Chess::SetFromString(const std::string& fen_str, int player) {
-  state_ = StateFromFen(fen_str);
-    
-  // Ensure the player to move matches the requested player
-  if ((player == 1 && state_.isBlackMove()) || (player == -1 && !state_.isBlackMove())) {
-    state_.setBlackMove(!state_.isBlackMove());
-  }
+  state_ = std::make_unique<State>(StateFromFen(fen_str));
     
   game_over_ = false;
   result_ = 0;
@@ -542,27 +541,27 @@ Move Chess::IndexToMove(int action_index) const {
 }
 
 bool Chess::IsCheckmate() const {
-  if (!isCheck(state_, state_.isBlackMove())) {
+  if (!isCheck(*state_, state_->isBlackMove())) {
     return false;
   }
-  return GenerateMoves(state_).empty();
+  return GenerateMoves(*state_).empty();
 }
 
 bool Chess::IsStalemate() const {
-  if (isCheck(state_, state_.isBlackMove())) {
+  if (isCheck(*state_, state_->isBlackMove())) {
     return false;
   }
-  return GenerateMoves(state_).empty();
+  return GenerateMoves(*state_).empty();
 }
 
 bool Chess::IsDraw() const {
   // 50-move rule
-  if (state_.get50MoveCount() >= 100) {
+  if (state_->get50MoveCount() >= 100) {
     return true;
   }
     
   // Insufficient material
-  if (isInsufficientMaterial(state_)) {
+  if (isInsufficientMaterial(*state_)) {
     return true;
   }
     
@@ -573,11 +572,11 @@ bool Chess::IsDraw() const {
 void Chess::UpdateGameStatus() {
   if (IsCheckmate()) {
     game_over_ = true;
-    result_ = state_.isBlackMove() ? 1 : -1; // If black is in checkmate, white wins
+    result_ = state_->isBlackMove() ? 1 : -1; // If black is in checkmate, white wins
   } else if (IsDraw()) {
     game_over_ = true;
     result_ = 0;
-  } else if (GenerateMoves(state_).empty()) {
+  } else if (GenerateMoves(*state_).empty()) {
     game_over_ = true;
     result_ = 0; // Stalemate
   }
@@ -614,6 +613,19 @@ Move CreateCastle(Square from, Square to) {
   return CreateMove(from, to) + (CASTLE << flag_bits);
 }
 
+// Convert a UCI move to a Move object
+// UCI moves are in the format of e2e4, e2e3, e2e5, e2e6, e2e7, e2e8, e2e4q, e2e4r, e2e4b, e2e4n
+// where the last character is the promotion piece (q, r, b, n)
+Move MoveFromUci(const std::string& uci_move) {
+  // When its not a promotion, the uci move is just the from and to squares
+  // examples of non-promotion moves: e2e4, e2e3, e2e5, e2e6, e2e7, e2e8
+  if (uci_move.size() == 4) {
+    return CreateMove(Square( uci_move[0] - 'a'), Square(uci_move[1] - '1'));
+  }
+  // When its a promotion, the uci move is the from and to squares and the promotion piece
+  // examples of promotion moves: e2e4q, e2e4r, e2e4b, e2e4n
+  return CreatePromotion(Square(uci_move[0] - 'a'), Square(uci_move[1] - '1'), Piece(uci_move[2]));
+} 
 
 Move ReflectMove(Move move) {
   auto s = GetFrom(move);

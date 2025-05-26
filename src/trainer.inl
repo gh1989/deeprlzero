@@ -7,11 +7,10 @@
 #include "games/positions.h"
 #include "eval_stats.h"
 #include "mcts.h"
+
 namespace deeprlzero {
 
-template <typename GameType>
-requires GameConcept<GameType>
-void Train(std::shared_ptr<torch::optim::Optimizer> optimizer, 
+inline void Train(std::shared_ptr<torch::optim::Optimizer> optimizer, 
            std::shared_ptr<NeuralNetwork> network, 
            const Config& config, 
            const GamePositions& positions) {
@@ -34,10 +33,6 @@ void Train(std::shared_ptr<torch::optim::Optimizer> optimizer,
   auto states = torch::stack(positions.boards).to(device);
   auto policies = torch::stack(policy_tensors).to(device);
   auto values = torch::tensor(positions.values).reshape({-1, 1}).to(device);
-  
-  // TODO: For longer games, the value targets would need temporal adjustment
-  // such as discounted returns or TD(λ) approaches to properly handle the 
-  // delayed nature of rewards in games like chess
 
   for (int epoch = 0; epoch < config.num_epochs; ++epoch) {
     optimizer->zero_grad();
@@ -58,8 +53,8 @@ void Train(std::shared_ptr<torch::optim::Optimizer> optimizer,
   network->to(torch::kCPU);
 }
 
-template <typename GameType>
-requires GameConcept<GameType>
+template <typename ExplicitVariant>
+requires GameConcept<ExplicitVariant>
 EvaluationStats EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> network,
                                      std::shared_ptr<NeuralNetwork> opponent,
                                      const Config& config) {
@@ -76,12 +71,12 @@ EvaluationStats EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> network,
   MCTS mcts_opponent(opponent, config);
 
   for (int i = 0; i < total_games; ++i) {
-    GameType game;
+    GameVariant game = CreateGame<ExplicitVariant>();
     bool network_plays_first = (i % 2 == 0);
 
-    while (!game.IsTerminal()) {
+    while (!IsTerminal(game)) {
       bool is_network_turn =
-          ((game.GetCurrentPlayer() == 1) == network_plays_first);
+          ((GetCurrentPlayer(game) == 1) == network_plays_first);
 
       if (is_network_turn) {
         mcts_main.ResetRoot();
@@ -89,18 +84,18 @@ EvaluationStats EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> network,
           mcts_main.Search(game, mcts_main.GetRoot());
         }
         int action = mcts_main.SelectMove(game, config.eval_temperature);
-        game.MakeMove(action);
+        MakeMove(game, action);
       } else {
         mcts_opponent.ResetRoot();
         for (int sim = 0; sim < config.num_simulations * 4; ++sim) {
           mcts_opponent.Search(game, mcts_opponent.GetRoot());
         }
         int action = mcts_opponent.SelectMove(game, config.eval_temperature);
-        game.MakeMove(action);
+        MakeMove(game, action);
       }
     }
 
-    float result = game.GetGameResult();
+    float result = GetGameResult(game);
     
     if (network_plays_first) {
       if (result > 0) wins_first++;
@@ -117,8 +112,8 @@ EvaluationStats EvaluateAgainstNetwork(std::shared_ptr<NeuralNetwork> network,
                         wins_second, draws_second, losses_second, total_games);
 }
 
-template <typename GameType>
-requires GameConcept<GameType>
+template <typename ExplicitVariant>
+requires GameConcept<ExplicitVariant>
 EvaluationStats EvaluateAgainstRandom(std::shared_ptr<NeuralNetwork> network,
                                     const Config& config) {
   network->to(torch::kCPU);
@@ -134,12 +129,12 @@ EvaluationStats EvaluateAgainstRandom(std::shared_ptr<NeuralNetwork> network,
   MCTS mcts(network, config);
   
   for (int i = 0; i < total_games; ++i) {
-    GameType game;
+    GameVariant game = CreateGame<ExplicitVariant>();
     bool network_plays_first = (i % 2 == 0);
     
-    while (!game.IsTerminal()) {
+    while (!IsTerminal(game)) {
       bool is_network_turn =
-          ((game.GetCurrentPlayer() == 1) == network_plays_first);
+          ((GetCurrentPlayer(game) == 1) == network_plays_first);
       
       if (is_network_turn) {
         mcts.ResetRoot();
@@ -147,16 +142,16 @@ EvaluationStats EvaluateAgainstRandom(std::shared_ptr<NeuralNetwork> network,
           mcts.Search(game, mcts.GetRoot());
         }
         int action = mcts.SelectMove(game, config.eval_temperature);
-        game.MakeMove(action);
+        MakeMove(game, action);
       } else {
-        auto valid_moves = game.GetValidMoves();
+        auto valid_moves = GetValidMoves(game);
         std::uniform_int_distribution<> dis(0, valid_moves.size() - 1);
         int action = valid_moves[dis(gen)];
-        game.MakeMove(action);
+        MakeMove(game, action);
       }
     }
     
-    float result = game.GetGameResult();
+    float result = GetGameResult(game);
     
     if (network_plays_first) {
       if (result > 0) wins_first++;
@@ -173,6 +168,6 @@ EvaluationStats EvaluateAgainstRandom(std::shared_ptr<NeuralNetwork> network,
                         wins_second, draws_second, losses_second, total_games);
 }
 
-}  // namespace deeprlzero
+}  
 
 #endif  // TRAINER_INL_
