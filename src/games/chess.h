@@ -43,9 +43,9 @@ public:
     int GetCurrentPlayer() const;
     
     // Methods from traits
-    int GetActionSize() const { return Traits::kNumActions; }
-    int GetInputChannels() const { return Traits::kNumChannels; }
-    int GetNumActions() const { return Traits::kNumActions; }
+    static int GetActionSize() { return Traits::kNumActions; }
+    static int GetInputChannels() { return Traits::kNumChannels; }
+    static int GetNumActions() { return Traits::kNumActions; }
     
     // Display methods
     std::string ToString() const;

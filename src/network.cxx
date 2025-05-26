@@ -1,5 +1,6 @@
 #include "network.h"
 #include "logger.h"
+#include "games/concepts.h"
 
 #include <filesystem>
 #include <cassert>
@@ -72,32 +73,24 @@ torch::Tensor ResidualBlock::forward(torch::Tensor x) {
   return x + out;
 }
 
-NeuralNetwork::NeuralNetwork(const Config& config) : config_(config) {
-  /// pack in the asserts
-  assert(config.num_filters > 0 );
-  assert(config.action_size > 0 );
 
-  // 3*3 for tic-tac-toe, 8*8 for chess... why not input
-  const auto board_size = 8 * 8;  
+NeuralNetwork::NeuralNetwork(const Config& config, int board_size, int action_size) : config_(config) {
+  assert(config.num_filters > 0);
+  assert(board_size > 0);
+  assert(action_size > 0); 
+
   const auto input_channels = 3;
-  board_size_ = board_size;
 
-  /// input channels, output channels, kernel size
   conv = register_module("conv", torch::nn::Conv2d(torch::nn::Conv2dOptions(input_channels, config.num_filters, 3).padding(1)));
-  /// batch normalization
   batch_norm = register_module("batch_norm", torch::nn::BatchNorm2d(config.num_filters));
 
-  // Resblocks
   for (int i = 0; i < config_.num_residual_blocks; i++) {
     res_blocks.push_back(register_module(
         "res_block_" + std::to_string(i), 
         std::make_shared<ResidualBlock>(config.num_filters)));
   }
 
-  /// output policy which is the distribution over the actions, in tic-tac-toe this is obviously 9
-  /// chess is 8*8*73
-  policy_fc = register_module("policy_fc", torch::nn::Linear(config.num_filters * board_size, config.action_size));
-  /// output value which is just a float
+  policy_fc = register_module("policy_fc", torch::nn::Linear(config.num_filters * board_size, action_size));
   value_fc = register_module("value_fc",  torch::nn::Linear(config.num_filters * board_size, 1));
 
   InitializeWeights();
@@ -147,7 +140,7 @@ void NeuralNetwork::MoveToDevice(const torch::Device& device) {
 }
 
 std::shared_ptr<NeuralNetwork> NeuralNetwork::NetworkClone(const torch::Device& device) const {
-  auto cloned_net = std::make_shared<NeuralNetwork>(config_);
+  auto cloned_net = std::make_shared<NeuralNetwork>(config_, board_size_, action_size_);
   
   torch::NoGradGuard no_grad;
   auto this_params = this->named_parameters(true);
@@ -168,21 +161,14 @@ std::shared_ptr<NeuralNetwork> NeuralNetwork::NetworkClone(const torch::Device& 
   return cloned_net;
 }
 
-std::shared_ptr<NeuralNetwork> CreateInitialNetwork(const Config& config) {
-    try {
-        return std::make_shared<NeuralNetwork>(config);
-    } catch (const std::exception& e) {
-        std::cerr << "Error creating network: " << e.what() << std::endl;
-        return nullptr;
-    }
-};
-
+template <typename GameType>
+requires GameConcept<GameType>
 std::shared_ptr<NeuralNetwork> LoadBestNetwork(const Config& config) {
     Logger &logger = Logger::GetInstance(config);
     try {
         if (std::filesystem::exists(config.model_path)) {
             logger.LogFormat("Loading model from: {}", config.model_path);
-            auto network = std::make_shared<NeuralNetwork>(config);
+            auto network = std::make_shared<NeuralNetwork>(config, GameType::GetBoardSize(), GameType::GetActionSize());
             torch::load(network, config.model_path);
             logger.Log("Model loaded successfully");
             return network;

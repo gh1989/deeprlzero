@@ -26,7 +26,6 @@ class Config {
   int num_simulations = 64;
   float c_puct = std::sqrt(2);
   float temperature = 1.5;
-  int action_size = 9;  // Total number of possible actions
   int mcts_batch_size = 64;
   float gamma_alpha = 0.3f;
   float gamma_beta = 0.7f;

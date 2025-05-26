@@ -200,5 +200,3 @@ auto VisitGame(const GameVariant& game, Func&& func) {
 }
 
 }
-
-#endif

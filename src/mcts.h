@@ -29,7 +29,8 @@ struct Node {
         parent(nullptr),
         action(-1),
         depth(0) {
-    children.resize(config.action_size);  // No second argument
+    ///sadly no way to get action size here
+    //children.resize(config.action_size);  
   }
 
   float GetValue() const {

@@ -101,8 +101,8 @@ GamePositions ExecuteEpisodesParallel(std::shared_ptr<NeuralNetwork> network, co
   return all_positions;
 }
 
-template <typename ExplicitVariant>
-requires GameConcept<ExplicitVariant>
+template <typename GameType>
+requires GameConcept<GameType>
 GamePositions AllEpisodes() {  
   GamePositions all_positions;
   std::map<std::string, float> minimax_values;
@@ -172,7 +172,7 @@ GamePositions AllEpisodes() {
     return best_value;
   };
 
-  GameVariant initial_game = CreateGame<ExplicitVariant>();
+  GameVariant initial_game = CreateGame<GameType>();
   std::vector<float> initial_policy;
   exploreMinimax(initial_game, initial_policy);
   

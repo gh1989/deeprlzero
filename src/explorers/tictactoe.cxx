@@ -590,8 +590,7 @@ void runComprehensiveTraining(std::shared_ptr<NeuralNetwork> network, Config con
 
 int main(int argc, char** argv) {
   Config config = Config::ParseCommandLine(argc, argv);
-  std::shared_ptr<NeuralNetwork> network = std::make_shared<NeuralNetwork>(config);
-  // Train on all possible games
+  std::shared_ptr<NeuralNetwork> network = CreateNetwork<TicTacToe>(config);
   runComprehensiveTraining(network, config);
   
   return 0;
