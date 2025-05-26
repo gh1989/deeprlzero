@@ -3,7 +3,7 @@
 #include "config.h"
 #include "logger.h"
 #include "thread.h"
-#include "games/tictactoe.h"
+#include "games/chess.h"
 #include "selfplay.h"
 #include <iostream>
 #include <fstream>
@@ -49,12 +49,12 @@ int main(int argc, char** argv) {
       logger.LogFormat("Starting iteration {}/{}", iter + 1, config.num_iterations);
       GamePositions positions;
       if (config.exhaustive_self_play) {
-        positions = AllEpisodes<TicTacToe>();
+        positions = AllEpisodes<Chess>();
       }
       else if (config.num_threads > 1) {
-        positions = ExecuteEpisodesParallel<TicTacToe>(best_network, config);
+        positions = ExecuteEpisodesParallel<Chess>(best_network, config);
       } else {
-        positions = ExecuteEpisode<TicTacToe>(best_network, config);
+        positions = ExecuteEpisode<Chess>(best_network, config);
       }
       logger.LogFormat("Collected {} game positions from self-play", positions.boards.size());
 
@@ -69,10 +69,10 @@ int main(int argc, char** argv) {
       }
 
       /// train - then accept/reject
-      Train<TicTacToe>(optimizer, network_to_train, config, positions);
+      Train<Chess>(optimizer, network_to_train, config, positions);
                       
       EvaluationStats evaluation_stats = 
-          EvaluateAgainstNetwork<TicTacToe>(network_to_train, best_network, config);
+          EvaluateAgainstNetwork<Chess>(network_to_train, best_network, config);
           
       bool network_accepted = 
           AcceptOrRejectNewNetwork(network_to_train, best_network, evaluation_stats, config );
@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
       /// every 5 iterations evaluation against random and 
       /// log the results
       logger.Log("Evaluating against random network ...");
-      EvaluateAgainstRandom<TicTacToe>(best_network, config);
+      EvaluateAgainstRandom<Chess>(best_network, config);
   }
   
   logger.Log("Training complete!");

@@ -5,16 +5,13 @@
 
 namespace deeprlzero {
 
-// Forward declarations of game classes
 class TicTacToe;
 class Chess;
 class Connect4;
 
-// Base traits template (not used directly)
 template <typename GameT>
 struct GameTraits;
 
-// TicTacToe traits specialization
 template <>
 struct GameTraits<TicTacToe> {
     static constexpr int kBoardSize = 3;
@@ -24,7 +21,6 @@ struct GameTraits<TicTacToe> {
     using BoardType = std::array<std::array<int, kBoardSize>, kBoardSize>;
 };
 
-// Chess traits specialization
 template <>
 struct GameTraits<Chess> {
     static constexpr int kBoardSize = 8;
@@ -34,7 +30,6 @@ struct GameTraits<Chess> {
     using BoardType = std::array<std::array<int, kBoardSize>, kBoardSize>;
 };
 
-// Connect4 traits specialization
 template <>
 struct GameTraits<Connect4> {
     static constexpr int kBoardSize = 7;

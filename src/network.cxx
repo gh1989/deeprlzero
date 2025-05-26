@@ -77,14 +77,8 @@ NeuralNetwork::NeuralNetwork(const Config& config) : config_(config) {
   assert(config.num_filters > 0 );
   assert(config.action_size > 0 );
 
-  /// Specialized for tic-tac-toe again :@
-  /// also input channels is always three, ours, theirs and a whole channel for the turn.
-  /// TODO: For longer games like chess, we'll need to:
-  /// 1. Add temporal discounting for reward signals
-  /// 2. Implement intermediate value functions beyond win/loss
-  /// 3. Adjust the network architecture to handle larger state spaces
-  /// 4. Support bootstrapping from intermediate positions
-  const auto board_size = 3 * 3;  
+  // 3*3 for tic-tac-toe, 8*8 for chess... why not input
+  const auto board_size = 8 * 8;  
   const auto input_channels = 3;
   board_size_ = board_size;
 
@@ -101,6 +95,7 @@ NeuralNetwork::NeuralNetwork(const Config& config) : config_(config) {
   }
 
   /// output policy which is the distribution over the actions, in tic-tac-toe this is obviously 9
+  /// chess is 8*8*73
   policy_fc = register_module("policy_fc", torch::nn::Linear(config.num_filters * board_size, config.action_size));
   /// output value which is just a float
   value_fc = register_module("value_fc",  torch::nn::Linear(config.num_filters * board_size, 1));
@@ -115,9 +110,6 @@ std::pair<torch::Tensor, torch::Tensor> NeuralNetwork::forward( torch::Tensor x)
 
 std::pair<torch::Tensor, torch::Tensor> NeuralNetwork::forward_impl(
     torch::Tensor x) {
-  // TODO: For longer games, the value prediction will need to be more 
-  // sophisticated, supporting temporal discounting and intermediate evaluations
-  // rather than just final game outcomes
   x = conv(x);
   x = batch_norm(x);
   x = torch::relu(x);
