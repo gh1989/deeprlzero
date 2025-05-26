@@ -55,7 +55,8 @@ int main(int argc, char* argv[]) {
   std::shared_ptr<NeuralNetwork> network;
   try {
     // Use the static method to load the best network
-    network = LoadBestNetwork(config);
+    network = CreateNetwork<TicTacToe>(config);
+    network = LoadBestNetwork(network, config);
     if (!network) {
       throw std::runtime_error("Model loading failed - returned null pointer");
     }

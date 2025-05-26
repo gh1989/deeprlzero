@@ -74,7 +74,7 @@ torch::Tensor ResidualBlock::forward(torch::Tensor x) {
 }
 
 
-NeuralNetwork::NeuralNetwork(const Config& config, int board_size, int action_size) : config_(config) {
+NeuralNetwork::NeuralNetwork(const Config& config, int board_size, int action_size) : config_(config), board_size_(board_size), action_size_(action_size) {
   assert(config.num_filters > 0);
   assert(board_size > 0);
   assert(action_size > 0); 
@@ -161,14 +161,11 @@ std::shared_ptr<NeuralNetwork> NeuralNetwork::NetworkClone(const torch::Device& 
   return cloned_net;
 }
 
-template <typename GameType>
-requires GameConcept<GameType>
-std::shared_ptr<NeuralNetwork> LoadBestNetwork(const Config& config) {
+std::shared_ptr<NeuralNetwork> LoadBestNetwork(std::shared_ptr<NeuralNetwork> network, const Config& config) {
     Logger &logger = Logger::GetInstance(config);
     try {
         if (std::filesystem::exists(config.model_path)) {
             logger.LogFormat("Loading model from: {}", config.model_path);
-            auto network = std::make_shared<NeuralNetwork>(config, GameType::GetBoardSize(), GameType::GetActionSize());
             torch::load(network, config.model_path);
             logger.Log("Model loaded successfully");
             return network;

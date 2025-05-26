@@ -25,10 +25,11 @@ public:
     void Reset();
     int GetCurrentPlayer() const { return current_player_; }
     
-    // Methods from traits
-    int GetActionSize() const { return Traits::kNumActions; }
-    int GetInputChannels() const { return Traits::kNumChannels; }
-    int GetNumActions() const { return Traits::kNumActions; }
+    // static Methods from traits
+    static int GetActionSize() { return Traits::kNumActions; }
+    static int GetInputChannels() { return Traits::kNumChannels; }
+    static int GetNumActions() { return Traits::kNumActions; }
+    static int GetBoardSize() { return Traits::kBoardSize; }
     
     // Display methods
     std::string ToString() const;

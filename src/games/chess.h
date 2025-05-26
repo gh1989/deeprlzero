@@ -42,10 +42,11 @@ public:
     void Reset();
     int GetCurrentPlayer() const;
     
-    // Methods from traits
+    // static Methods from traits
     static int GetActionSize() { return Traits::kNumActions; }
     static int GetInputChannels() { return Traits::kNumChannels; }
     static int GetNumActions() { return Traits::kNumActions; }
+    static int GetBoardSize() { return Traits::kBoardSize; }
     
     // Display methods
     std::string ToString() const;

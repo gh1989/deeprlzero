@@ -31,8 +31,8 @@ int main(int argc, char** argv) {
   int iterations_since_improvement = 0;
 
   /// get the best network from the file or create a new one and just save that (static operations pass in the config.)
-  std::shared_ptr<NeuralNetwork> best_network = nullptr;
-  best_network = LoadBestNetwork<Game>(config); // the network arch depends on the game now... we find out if this design choice is going to cause issues...
+  std::shared_ptr<NeuralNetwork> best_network = CreateNetwork<Game>(config); // config twice... here and below. not good
+  best_network = LoadBestNetwork(best_network, config); // the network arch depends on the game now... we find out if this design choice is going to cause issues...
   if (!best_network) {
       logger.Log("No existing model found. Creating a new one.");
       best_network = CreateNetwork<Game>(config);

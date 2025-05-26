@@ -60,7 +60,7 @@ void runComprehensiveChessTraining(std::shared_ptr<NeuralNetwork> network, Confi
 
 int main(int argc, char** argv) {
   Config config = Config::ParseCommandLine(argc, argv);
-  std::shared_ptr<NeuralNetwork> network = std::make_shared<NeuralNetwork>(config);
+  std::shared_ptr<NeuralNetwork> network = CreateNetwork<Chess>(config);
   
   // Train on curated chess positions
   runComprehensiveChessTraining(network, config);

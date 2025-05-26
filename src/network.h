@@ -26,7 +26,7 @@ class ResidualBlock : public torch::nn::Module,  public std::enable_shared_from_
 
 class NeuralNetwork : public torch::nn::Module, public std::enable_shared_from_this<NeuralNetwork> {
  public:
-  NeuralNetwork(const Config& config, int board_size, int action_size) : config_(config), board_size_(board_size), action_size_(action_size) {}
+  NeuralNetwork(const Config& config, int board_size, int action_size);
 
   std::pair<torch::Tensor, torch::Tensor> forward(torch::Tensor x);
   std::pair<torch::Tensor, torch::Tensor> forward_impl(torch::Tensor x);
@@ -49,15 +49,13 @@ void ValidateGradientFlow(const torch::Tensor& input,
   torch::Tensor cached_value_;
   std::shared_ptr<std::mutex> forward_mutex_ = std::make_shared<std::mutex>();
   Config config_;
-  int board_size_;
-  int action_size_;
+  int board_size_; // now we need to keep these due to the cloning...
+  int action_size_; // ...
 };
 
 float CalculatePolicyEntropy(const std::vector<float>& policy);
 
-template <typename GameType>
-requires GameConcept<GameType>
-std::shared_ptr<NeuralNetwork> LoadBestNetwork(const Config& config);
+std::shared_ptr<NeuralNetwork> LoadBestNetwork(std::shared_ptr<NeuralNetwork> network, const Config& config);
 void SaveBestNetwork(std::shared_ptr<NeuralNetwork> network, const Config& config);
 
 template <typename GameType>
